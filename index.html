@@ -174,8 +174,8 @@
     var side = Wt >= 900, cardW = Math.min(306, Wt), gap = 14;       // card to the right of the chart, or below it on narrow screens
     var cw = side ? Wt - cardW - gap : Wt;
     var chH = Math.round(Math.max(520, Math.min(700, cw * 0.78)));
-    var rh = side ? Math.min(22, Math.floor((chH - 24) / 20)) : 18;
-    var cardH = 24 + 20 * rh;
+    var rh = side ? Math.min(22, Math.floor((chH - 24) / 21)) : 18;
+    var cardH = 24 + 21 * rh;
     var H = side ? Math.max(chH, cardH) : chH + 12 + cardH;
     cv.style.height = H + 'px';
     cv.width = Math.round(Wt*dpr); cv.height = Math.round(H*dpr);
@@ -227,7 +227,10 @@
       ['Target # Of Clients /Week', wk(n / 4), LC.p, GR, '#000', 1],
       ['Ad Spend /Week', usd(ad / 4, 2), LC.p, GR, '#000', 1],
       ['Gross Revenue /Week', usd(rev / 4, 2), LC.p, GR, '#000', 1],
-      ['Net Profit /Week', usd(np / 4, 2), LC.p, GR, '#000', 1]
+      ['Net Profit /Week', usd(np / 4, 2), LC.p, GR, '#000', 1],
+      // verdict row: $1 of ad spend returns $ROI+1 of revenue
+      ['', (m.roi >= 1 ? 'GROWTH' : m.roi >= 0 ? 'NO GROWTH' : 'LOSS') + '   $1 \u2192 ' + usd(s.aov / m.cpa, 2), null, null, null, 1, 0,
+       m.roi >= 1 ? 'growth' : m.roi >= 0 ? 'nogrowth' : 'loss']
     ];
   }
 
@@ -249,6 +252,18 @@
     c.textAlign = 'center';
     rows.forEach(function(r, i){
       var yy = top + i * rh, hl = r[6];
+      if (r[7]){                                   // verdict row: one merged cell
+        var k = r[7];
+        c.fillStyle = k === 'growth' ? '#16a34a' : k === 'loss' ? '#c81e1e' : '#d9d9d9'; c.fillRect(x, yy, w, rh);
+        if (k === 'nogrowth'){ c.fillStyle = hatchPattern(c, '#3a3a3a'); c.fillRect(x, yy, w, rh); }
+        c.strokeStyle = 'rgba(0,0,0,.75)'; c.lineWidth = 2; c.strokeRect(x + 1, yy + 1, w - 2, rh - 2);
+        c.font = '800 13.5px ' + FF; c.textAlign = 'center';
+        if (k === 'nogrowth'){                      // plain plate behind the text so it stays readable on the hatching
+          var tw = c.measureText(r[1]).width + 16; c.fillStyle = '#d9d9d9'; c.fillRect(x + w / 2 - tw / 2, yy + 3, tw, rh - 6);
+        }
+        c.fillStyle = k === 'nogrowth' ? '#111' : '#fff'; c.fillText(r[1], x + w / 2, yy + rh / 2 + .5);
+        return;
+      }
       c.fillStyle = hl || r[2]; c.fillRect(x, yy, lw, rh);
       c.fillStyle = hl || r[3]; c.fillRect(x + lw, yy, vw, rh);
       c.strokeStyle = 'rgba(0,0,0,.55)'; c.lineWidth = 1; c.strokeRect(x + .5, yy + .5, w - 1, rh - 1);
