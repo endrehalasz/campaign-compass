@@ -47,6 +47,7 @@
   .sw{width:22px;height:0;border-top:3px solid var(--accent)}
   .sw.d{border-top:2px dashed var(--axis)}
   .box{width:14px;height:14px;border-radius:3px}
+  .box.hatch{border:1px solid var(--axis);background:repeating-linear-gradient(135deg,var(--axis) 0 1.4px,transparent 1.4px 5px)}
   #recBtn{position:fixed;top:12px;right:12px;z-index:10;padding:8px 14px;border-radius:999px;border:1px solid var(--line);background:var(--card);color:var(--ink);font-weight:600;font-size:13px;font-family:inherit;cursor:pointer;box-shadow:0 2px 8px rgba(0,0,0,.15)}
   #recBtn.on{background:var(--red);border-color:var(--red);color:#fff}
   .dl{margin-top:14px;padding:9px 16px;border-radius:999px;border:1px solid var(--line);background:var(--card);color:var(--ink);font-weight:600;font-size:14px;font-family:inherit;cursor:pointer;margin-right:10px}
@@ -100,8 +101,9 @@
       <div class="legend">
         <span><i class="sw"></i> Current SPCR</span>
         <span><i class="sw d"></i> SPCR 1–5%</span>
-        <span><i class="box" style="background:var(--redfill);border:1px solid var(--red)"></i> ROI below 100%</span>
-        <span><i class="box" style="background:var(--greenfill);border:1px solid var(--green)"></i> ROI above 100%</span>
+        <span><i class="box" style="background:var(--greenfill);border:1px solid var(--green)"></i> ROI above 100% (growth)</span>
+        <span><i class="box hatch"></i> ROI below 100% (no growth)</span>
+        <span><i class="box" style="background:rgba(217,58,58,.35);border:1px solid var(--red)"></i> Loss</span>
         <span>Hover for details · click to pin / release · push against the ROI chart's left/right edge to scroll</span>
       </div>
     </div>
@@ -111,7 +113,7 @@
     Formulas (from the KPIs sheet): <code>CPC = CPM / (CTR·1000)</code> · <code>CPA = CPC / SPCR</code> ·
     <code>COGS = AOV·3% + 0.2</code> · <code>AOP = AOV − COGS − CPA</code> · <code>ROI = AOV / CPA − 100%</code> ·
     <code>Net Profit /Month = Target # Of Clients /Month × AOP (after ad spend)</code>.
-    The red/green split in the upper chart is the ROI = 100% line: curves steeper than it earn more than 100% ROI.
+    In the upper chart the green/hatched split is the ROI = 100% line: curves steeper than it earn more than 100% ROI. Red = loss.
   </p>
   <button id="pdfBtn" type="button" class="dl">⬇ Save PDF</button>
   <span class="foot">Saves the current setup. Pin a point on the chart first to include the data card.</span>
@@ -267,6 +269,14 @@
     c.textAlign = 'left';
   }
 
+  // diagonal hatch fill (zones where ROI is below 100% = no growth)
+  function hatchPattern(c, color){
+    var k = document.createElement('canvas'); k.width = k.height = 9;
+    var g = k.getContext('2d'); g.strokeStyle = color; g.lineWidth = 1.3; g.globalAlpha = .75;
+    g.beginPath(); g.moveTo(0, 9); g.lineTo(9, 0); g.moveTo(-1, 1); g.lineTo(1, -1); g.moveTo(8, 10); g.lineTo(10, 8); g.stroke();
+    return c.createPattern(k, 'repeat');
+  }
+
   function render(ctx, W, H, hoverN, isPinned){
     var s = state();
     var cols = {red:css('--red'), green:css('--green'), redf:css('--redfill'), greenf:css('--greenfill'),
@@ -277,11 +287,14 @@
     var pw = W - L - R;
     var yA0 = T, yB0 = T + hA + gap;
 
+    var hatch = hatchPattern(ctx, cols.axis);
     var cur = model(s.cpm, s.ctr, s.spcr, s.aov);
     // scrolling view: x offset is shared by both panels, y window follows the hovered point (span stays P_MAX)
     var nL = xOff, nR = xOff + X_MAX;
     var nAct = hoverN != null ? Math.max(0, Math.min(N_CAP, Math.round(hoverN))) : null;
-    var yMin = (nAct != null && cur.aop2 > 0) ? Math.max(0, cur.aop2 * nAct - 0.96 * P_MAX) : 0;
+    var nRef = nAct != null ? nAct : (cur.aop2 < 0 ? 100 : null);   // at rest a losing curve is shown around 100 clients
+    var pRef = nRef != null ? cur.aop2 * nRef : 0;
+    var yMin = pRef > 0 ? Math.max(0, pRef - 0.96 * P_MAX) : (pRef < 0 ? pRef - 0.04 * P_MAX : 0);
     var yMax = yMin + P_MAX;
     var xs = function(n){ return L + (n - nL) / X_MAX * pw; };
     var yA = function(p){ return yA0 + hA - (p - yMin) / P_MAX * hA; };
@@ -306,8 +319,13 @@
     var tA = thr * nL, tB = thr * nR, yUp = yMax + P_MAX, yDn = yMin - P_MAX;
     ctx.fillStyle = cols.greenf;
     ctx.beginPath(); ctx.moveTo(xs(nL), yA(tA)); ctx.lineTo(xs(nR), yA(tB)); ctx.lineTo(xs(nR), yA(yUp)); ctx.lineTo(xs(nL), yA(yUp)); ctx.closePath(); ctx.fill();
-    ctx.fillStyle = cols.redf;
+    // ROI below 100%: hatched (no growth)
+    ctx.fillStyle = hatch;
     ctx.beginPath(); ctx.moveTo(xs(nL), yA(tA)); ctx.lineTo(xs(nR), yA(tB)); ctx.lineTo(xs(nR), yA(yDn)); ctx.lineTo(xs(nL), yA(yDn)); ctx.closePath(); ctx.fill();
+    // loss (net profit below zero): red
+    ctx.globalAlpha = .30; ctx.fillStyle = cols.red;
+    ctx.fillRect(L, yA(0), pw, yA(yDn) - yA(0)); ctx.globalAlpha = 1;
+    ctx.strokeStyle = cols.red; ctx.lineWidth = 1.2; ctx.beginPath(); ctx.moveTo(L, Math.round(yA(0)) + .5); ctx.lineTo(L + pw, Math.round(yA(0)) + .5); ctx.stroke();
     ctx.restore();
 
     // grid + ticks A
@@ -315,7 +333,7 @@
     for (var p = Math.ceil(yMin / 5000) * 5000; p <= yMax + 1e-6; p += 5000){
       var y = Math.round(yA(p)) + .5;
       ctx.beginPath(); ctx.moveTo(L, y); ctx.lineTo(L+pw, y); ctx.stroke();
-      ctx.fillText('$' + (p/1000) + 'k', L - 8, y);
+      ctx.fillText((p < 0 ? '-' : '') + '$' + (Math.abs(p)/1000) + 'k', L - 8, y);
     }
     ctx.textAlign = 'center'; ctx.textBaseline = 'top';
     for (var n = Math.ceil(nL / 250) * 250; n <= nR + 1e-6; n += 250){
@@ -329,14 +347,12 @@
     ctx.beginPath(); ctx.rect(L, yA0 - 2, pw + 1, hA + 4); ctx.clip();
     ctx.lineWidth = 1.6; ctx.setLineDash([6,5]); ctx.strokeStyle = cols.axis;
     scen.forEach(function(o){
-      if (o.slope <= 0) return;
       ctx.beginPath(); ctx.moveTo(xs(nL), yA(o.slope * nL)); ctx.lineTo(xs(nR), yA(o.slope * nR)); ctx.stroke();
     });
     ctx.setLineDash([]);
     ctx.lineWidth = 3.4; ctx.strokeStyle = cols.accent;
     ctx.beginPath();
-    if (cur.aop2 >= 0) { ctx.moveTo(xs(nL), yA(cur.aop2 * nL)); ctx.lineTo(xs(nR), yA(cur.aop2 * nR)); }
-    else { ctx.moveTo(xs(nL), yA(0)); ctx.lineTo(xs(nR), yA(0)); } // negative profit runs below the visible axis
+    ctx.moveTo(xs(nL), yA(cur.aop2 * nL)); ctx.lineTo(xs(nR), yA(cur.aop2 * nR));
     ctx.stroke();
     ctx.restore();
 
@@ -345,15 +361,16 @@
     ctx.fillStyle = cols.muted; ctx.textAlign = 'left';
     var lastLx = -99, stack = 0;
     scen.slice().sort(function(a,b){ return b.slope - a.slope; }).forEach(function(o){
-      if (o.slope <= 0) return;
-      var va = Math.max(nL, yMin / o.slope), vb = Math.min(nR, yMax / o.slope);
+      if (o.slope === 0) return;
+      var lo = o.slope > 0 ? yMin / o.slope : yMax / o.slope, hi = o.slope > 0 ? yMax / o.slope : yMin / o.slope;
+      var va = Math.max(nL, lo), vb = Math.min(nR, hi);
       if (va > vb) return;
       var ne = vb, pe = o.slope * ne;
-      var lx = xs(ne), ly = yA(pe);
+      var lx = xs(ne), ly = yA(pe), dir = o.slope > 0 ? -1 : 1;
       if (ne >= nR - 0.5) { ctx.textAlign = 'left'; ctx.fillText(o.k + '%', Math.min(lx + 4, W - 30), ly); }
       else {
         stack = (Math.abs(lx - lastLx) < 26) ? stack + 1 : 0;
-        ctx.textAlign = 'center'; ctx.fillText(o.k + '%', lx - stack * 0, ly - 8 - stack * 12);
+        ctx.textAlign = 'center'; ctx.fillText(o.k + '%', lx, ly + dir * (8 + stack * 12));
         lastLx = lx;
       }
     });
@@ -364,10 +381,6 @@
     ctx.fillStyle = cols.ink; ctx.textAlign = 'left'; ctx.font = '600 13px -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif';
     ctx.fillText('Net Profit /Month', L, yA0 - 12);
     ctx.font = '12px -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif';
-    if (cur.aop2 < 0){
-      ctx.fillStyle = cols.red; ctx.textAlign = 'right';
-      ctx.fillText('Current SPCR is below break-even (negative profit)', L + pw - 8, yA0 + 14);
-    }
     // axes A
     ctx.strokeStyle = cols.axis; ctx.lineWidth = 1.2;
     ctx.strokeRect(L + .5, yA0 + .5, pw, hA);
@@ -376,7 +389,9 @@
     ctx.save();
     ctx.beginPath(); ctx.rect(L, yB0, pw, hB); ctx.clip();
     ctx.fillStyle = cols.greenf; ctx.fillRect(L, yB0, pw, yB(1) - yB0);
-    ctx.fillStyle = cols.redf; ctx.fillRect(L, yB(1), pw, yB0 + hB - yB(1));
+    ctx.fillStyle = hatch; ctx.fillRect(L, yB(1), pw, yB0 + hB - yB(1));           // ROI below 100%: hatched
+    ctx.globalAlpha = .30; ctx.fillStyle = cols.red;                                // loss (ROI below 0%): red
+    ctx.fillRect(L, yB(0), pw, yB0 + hB - yB(0)); ctx.globalAlpha = 1;
     ctx.restore();
 
     ctx.strokeStyle = cols.grid; ctx.lineWidth = 1; ctx.fillStyle = cols.muted; ctx.textAlign = 'right'; ctx.textBaseline = 'middle';
@@ -511,12 +526,14 @@
     c.font = '13px ' + F; c.textAlign = 'left'; c.fillStyle = muted;
     c.strokeStyle = accent; c.lineWidth = 3; c.setLineDash([]); c.beginPath(); c.moveTo(lx, ly - 4); c.lineTo(lx + 22, ly - 4); c.stroke();
     c.fillText('Current SPCR', lx + 30, ly);
-    lx += 150; c.strokeStyle = css('--axis'); c.lineWidth = 2; c.setLineDash([5,4]); c.beginPath(); c.moveTo(lx, ly - 4); c.lineTo(lx + 22, ly - 4); c.stroke(); c.setLineDash([]);
+    lx += 125; c.strokeStyle = css('--axis'); c.lineWidth = 2; c.setLineDash([5,4]); c.beginPath(); c.moveTo(lx, ly - 4); c.lineTo(lx + 22, ly - 4); c.stroke(); c.setLineDash([]);
     c.fillText('SPCR 1–5%', lx + 30, ly);
-    lx += 140; c.fillStyle = css('--redfill'); c.fillRect(lx, ly - 13, 14, 14); c.strokeStyle = red; c.lineWidth = 1; c.strokeRect(lx + .5, ly - 12.5, 13, 13);
-    c.fillStyle = muted; c.fillText('ROI below 100%', lx + 22, ly);
-    lx += 150; c.fillStyle = css('--greenfill'); c.fillRect(lx, ly - 13, 14, 14); c.strokeStyle = green; c.strokeRect(lx + .5, ly - 12.5, 13, 13);
-    c.fillStyle = muted; c.fillText('ROI above 100%', lx + 22, ly);
+    lx += 120; c.fillStyle = css('--greenfill'); c.fillRect(lx, ly - 13, 14, 14); c.strokeStyle = green; c.lineWidth = 1; c.strokeRect(lx + .5, ly - 12.5, 13, 13);
+    c.fillStyle = muted; c.fillText('ROI > 100%', lx + 22, ly);
+    lx += 112; c.fillStyle = hatchPattern(c, css('--axis')); c.fillRect(lx, ly - 13, 14, 14); c.strokeStyle = css('--axis'); c.strokeRect(lx + .5, ly - 12.5, 13, 13);
+    c.fillStyle = muted; c.fillText('ROI < 100%', lx + 22, ly);
+    lx += 112; c.globalAlpha = .35; c.fillStyle = red; c.fillRect(lx, ly - 13, 14, 14); c.globalAlpha = 1; c.strokeStyle = red; c.strokeRect(lx + .5, ly - 12.5, 13, 13);
+    c.fillStyle = muted; c.fillText('Loss', lx + 22, ly);
   }
 
   function recLoop(){ if (!recording) return; videoFrame(); recRaf = requestAnimationFrame(recLoop); }
