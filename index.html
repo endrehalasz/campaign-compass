@@ -23,10 +23,10 @@
   *{box-sizing:border-box}
   html,body{margin:0}
   body{background:var(--bg);color:var(--ink);font:15px/1.45 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif}
-  .wrap{max-width:1180px;margin:0 auto;padding:20px 16px 40px}
+  .wrap{max-width:1500px;margin:0 auto;padding:20px 16px 40px}
   h1{font-size:clamp(20px,3.2vw,30px);line-height:1.2;margin:0 0 4px}
   .sub{color:var(--muted);margin:0 0 18px}
-  .grid{display:grid;grid-template-columns:320px 1fr;gap:16px;align-items:start}
+  .grid{display:grid;grid-template-columns:300px 1fr;gap:16px;align-items:start}
   @media(max-width:880px){.grid{grid-template-columns:1fr}}
   .card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:16px}
   .ctl{margin-bottom:16px}
@@ -49,6 +49,8 @@
   .box{width:14px;height:14px;border-radius:3px}
   #recBtn{position:fixed;top:12px;right:12px;z-index:10;padding:8px 14px;border-radius:999px;border:1px solid var(--line);background:var(--card);color:var(--ink);font-weight:600;font-size:13px;font-family:inherit;cursor:pointer;box-shadow:0 2px 8px rgba(0,0,0,.15)}
   #recBtn.on{background:var(--red);border-color:var(--red);color:#fff}
+  .dl{margin-top:14px;padding:9px 16px;border-radius:999px;border:1px solid var(--line);background:var(--card);color:var(--ink);font-weight:600;font-size:14px;font-family:inherit;cursor:pointer;margin-right:10px}
+  .dl:hover{border-color:var(--accent)}
   .foot{margin-top:14px;font-size:12.5px;color:var(--muted)}
   .foot code{background:var(--line);padding:1px 5px;border-radius:4px;font-size:12px}
 </style>
@@ -111,6 +113,8 @@
     <code>Net Profit /Month = Target # Of Clients /Month × AOP (after ad spend)</code>.
     The red/green split in the upper chart is the ROI = 100% line: curves steeper than it earn more than 100% ROI.
   </p>
+  <button id="pdfBtn" type="button" class="dl">⬇ Save PDF</button>
+  <span class="foot">Saves the current setup. Pin a point on the chart first to include the data card.</span>
 </div>
 
 <script>
@@ -163,12 +167,31 @@
 
   function draw(){
     var dpr = window.devicePixelRatio || 1;
-    var W = cv.clientWidth, H = Math.round(Math.max(520, Math.min(700, W * 0.78)));
+    var Wt = cv.clientWidth;
+    var side = Wt >= 900, cardW = Math.min(306, Wt), gap = 14;       // card to the right of the chart, or below it on narrow screens
+    var cw = side ? Wt - cardW - gap : Wt;
+    var chH = Math.round(Math.max(520, Math.min(700, cw * 0.78)));
+    var rh = side ? Math.min(22, Math.floor((chH - 24) / 20)) : 18;
+    var cardH = 24 + 20 * rh;
+    var H = side ? Math.max(chH, cardH) : chH + 12 + cardH;
     cv.style.height = H + 'px';
-    cv.width = Math.round(W*dpr); cv.height = Math.round(H*dpr);
+    cv.width = Math.round(Wt*dpr); cv.height = Math.round(H*dpr);
     ctx.setTransform(dpr,0,0,dpr,0,0);
-    ctx.clearRect(0,0,W,H);
-    cv._geom = render(ctx, W, H, activeN(), pinnedN != null);
+    ctx.clearRect(0,0,Wt,H);
+    ctx.save(); ctx.beginPath(); ctx.rect(0, 0, cw, chH); ctx.clip();
+    cv._geom = render(ctx, cw, chH, activeN(), pinnedN != null);
+    ctx.restore();
+    var s = state(), m = model(s.cpm, s.ctr, s.spcr, s.aov), n = cardN();
+    drawCard(ctx, cardRows(s, m, n), side ? cw + gap : Math.round((Wt - cardW) / 2), side ? 0 : chH + 12, cardW, rh,
+             pinnedN != null, css('--accent'), css('--muted'), n);
+  }
+
+  // clients value shown on the card: pinned/hovered point, otherwise the last one (default 100, as in the sheet)
+  var lastN = 100;
+  function cardN(){
+    var a = activeN();
+    if (a != null) lastN = Math.max(0, Math.min(X_MAX, Math.round(a)));
+    return lastN;
   }
 
   // Card in the look of the KPIs sheet (label colours, white input cells, grey calculated cells, red/green results)
@@ -196,7 +219,7 @@
       ['ROI', (m.roi * 100).toFixed(2) + '%', LC.g, res(m.roi >= 0), '#fff', 1],
       ['Target # Of Clients /Month', n.toLocaleString('en-US'), LC.p, WH, '#000', 1],
       ['Total Ad Spend /Month', usd(ad, 2), LC.p, GR, '#000', 1],
-      ['Gross Revenue /Month', usd(rev, 2), LC.p, GR, '#000', 1],
+      ['Gross Revenue /Month', usd(rev, 2), LC.p, GR, '#000', 1, 1],
       ['Net Profit /Month', usd(np, 2), LC.p, GR, '#000', 1],
       ['Target # Of Clients /Week', wk(n / 4), LC.p, GR, '#000', 1],
       ['Ad Spend /Week', usd(ad / 4, 2), LC.p, GR, '#000', 1],
@@ -205,42 +228,41 @@
     ];
   }
 
-  function drawCard(c, rows, ax, ay, bd, pinned, accent){
+  // Single-column sheet-style card, drawn OUTSIDE the plot area at (x, y), width w, row height rh
+  function drawCard(c, rows, x, y, w, rh, pinned, accent, muted, nShown){
     var FF = '-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif';
-    var narrow = (bd.x1 - bd.x0) < 700;
-    var ncol = narrow ? 1 : 2, rh = narrow ? 17 : 20, lw = narrow ? 186 : 218, vw = narrow ? 76 : 88;
-    var per = narrow ? rows.length : 12;
-    var w = (lw + vw) * ncol, h = per * rh;
-    var bx = ax + 16; if (bx + w > bd.x1) bx = ax - 16 - w; if (bx < bd.x0) bx = Math.max(2, bd.x1 - w);
-    var by = Math.max(bd.y0 + 2, Math.min(bd.y1 - h - 2, ay - h / 2));
-    c.save();
-    c.shadowColor = 'rgba(0,0,0,.4)'; c.shadowBlur = 14; c.shadowOffsetY = 3;
-    c.fillStyle = '#d9d9d9'; c.fillRect(bx, by, lw + vw, h);
-    if (ncol === 2) c.fillRect(bx + lw + vw, by, lw + vw, (rows.length - per) * rh);
-    c.restore();
-    c.textAlign = 'center'; c.textBaseline = 'middle';
-    rows.forEach(function(r, i){
-      var col = narrow ? 0 : (i < per ? 0 : 1), row = narrow ? i : (i < per ? i : i - per);
-      var x = bx + col * (lw + vw), y = by + row * rh;
-      c.fillStyle = r[2]; c.fillRect(x, y, lw, rh);
-      c.fillStyle = r[3]; c.fillRect(x + lw, y, vw, rh);
-      c.strokeStyle = 'rgba(0,0,0,.55)'; c.lineWidth = 1; c.strokeRect(x + .5, y + .5, lw + vw - 1, rh - 1);
-      c.beginPath(); c.moveTo(x + lw + .5, y); c.lineTo(x + lw + .5, y + rh); c.stroke();
-      var fs = narrow ? 10.5 : 11.5;
-      c.font = '700 ' + fs + 'px ' + FF;
-      while (fs > 8 && c.measureText(r[0]).width > lw - 8) { fs -= .5; c.font = '700 ' + fs + 'px ' + FF; }
-      c.fillStyle = '#fff'; c.fillText(r[0], x + lw / 2, y + rh / 2 + .5);
-      c.font = (r[5] ? '700 ' : '400 ') + (narrow ? 10.5 : 11.5) + 'px ' + FF;
-      c.fillStyle = r[4]; c.fillText(r[1], x + lw + vw / 2, y + rh / 2 + .5);
-    });
-    c.strokeStyle = pinned ? accent : 'rgba(0,0,0,.8)'; c.lineWidth = pinned ? 3 : 1.5;
-    c.strokeRect(bx, by, lw + vw, h);
-    if (ncol === 2) c.strokeRect(bx + lw + vw, by, lw + vw, (rows.length - per) * rh);
+    var lw = Math.round(w * 0.68), vw = w - lw, hh = 24;
+    // header: state of the card
+    c.textBaseline = 'middle'; c.textAlign = 'left';
     if (pinned){
-      c.fillStyle = accent; c.font = '700 10px ' + FF; c.textAlign = 'left';
-      var tw = c.measureText('PINNED – click to release').width + 12;
-      c.fillRect(bx, by - 15, tw, 15); c.fillStyle = '#fff'; c.textBaseline = 'middle'; c.fillText('PINNED – click to release', bx + 6, by - 7.5);
+      c.fillStyle = accent; c.fillRect(x, y, w, hh - 4);
+      c.fillStyle = '#fff'; c.font = '700 11px ' + FF;
+      c.fillText('PINNED at ' + nShown.toLocaleString('en-US') + ' clients – click chart to release', x + 8, y + (hh - 4) / 2 + .5);
+    } else {
+      c.fillStyle = muted; c.font = '600 11px ' + FF;
+      c.fillText('Hover the chart · click to pin', x + 2, y + (hh - 4) / 2 + .5);
     }
+    var top = y + hh;
+    c.textAlign = 'center';
+    rows.forEach(function(r, i){
+      var yy = top + i * rh, hl = r[6];
+      c.fillStyle = hl ? '#16a34a' : r[2]; c.fillRect(x, yy, lw, rh);
+      c.fillStyle = hl ? '#16a34a' : r[3]; c.fillRect(x + lw, yy, vw, rh);
+      c.strokeStyle = 'rgba(0,0,0,.55)'; c.lineWidth = 1; c.strokeRect(x + .5, yy + .5, w - 1, rh - 1);
+      c.beginPath(); c.moveTo(x + lw + .5, yy); c.lineTo(x + lw + .5, yy + rh); c.stroke();
+      var fs = hl ? 12.5 : 11.5, wt = hl ? '800 ' : '700 ';
+      c.font = wt + fs + 'px ' + FF;
+      while (fs > 8 && c.measureText(r[0]).width > lw - 8) { fs -= .5; c.font = wt + fs + 'px ' + FF; }
+      c.fillStyle = '#fff'; c.fillText(r[0], x + lw / 2, yy + rh / 2 + .5);
+      c.font = (r[5] || hl ? (hl ? '800 ' : '700 ') : '400 ') + (hl ? 13.5 : 11.5) + 'px ' + FF;
+      c.fillStyle = hl ? '#fff' : r[4]; c.fillText(r[1], x + lw + vw / 2, yy + rh / 2 + .5);
+    });
+    // thick frame around the highlighted Gross Revenue /Month row
+    rows.forEach(function(r, i){
+      if (!r[6]) return;
+      c.strokeStyle = '#0b5a26'; c.lineWidth = 3; c.strokeRect(x + 1.5, top + i * rh + 1.5, w - 3, rh - 3);
+    });
+    c.strokeStyle = 'rgba(0,0,0,.8)'; c.lineWidth = 1.5; c.strokeRect(x, top, w, rows.length * rh);
     c.textAlign = 'left';
   }
 
@@ -419,7 +441,6 @@
       ctx.beginPath(); ctx.arc(hx, py, isPinned ? 7 : 5, 0, 7); ctx.fill(); ctx.stroke();
       // same dot on the ROI line
       ctx.beginPath(); ctx.arc(hx, Math.max(yB0, Math.min(yB0 + hB, yB(cur.roi))), isPinned ? 6 : 4, 0, 7); ctx.fill(); ctx.stroke();
-      drawCard(ctx, cardRows(s, cur, nn), hx, py, {x0: L, y0: yA0, x1: L + pw + R - 6, y1: yB0 + hB}, isPinned, cols.accent);
     }
 
     return {L:L, pw:pw};
@@ -430,12 +451,13 @@
 
   function rr(c, x, y, w, h, r){ c.beginPath(); if (c.roundRect) c.roundRect(x, y, w, h, r); else c.rect(x, y, w, h); }
 
-  function videoFrame(){
-    var c = recCv.getContext('2d'), W = 1280, H = 720, s = state(), m = model(s.cpm, s.ctr, s.spcr, s.aov);
+  function videoFrame(cvs, withCard, noHover){
+    cvs = cvs || recCv; if (withCard === undefined) withCard = true;
+    var c = cvs.getContext('2d'), W = 1280, H = 720, s = state(), m = model(s.cpm, s.ctr, s.spcr, s.aov);
     var bg = css('--bg'), card = css('--card'), ink = css('--ink'), muted = css('--muted'), line = css('--line'),
         accent = css('--accent'), red = css('--red'), green = css('--green');
     var F = '-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif';
-    c.setTransform(1,0,0,1,0,0);
+    var sc = cvs.width / 1280; c.setTransform(sc,0,0,sc,0,0);
     c.fillStyle = bg; c.fillRect(0,0,W,H);
     c.textBaseline = 'alphabetic'; c.textAlign = 'left';
     c.fillStyle = ink; c.font = '700 26px ' + F;
@@ -476,11 +498,15 @@
     c.fillStyle = ink; c.font = '700 16px ' + F; c.fillText(Math.round(m.imp).toLocaleString('en-US'), px + 16, sy + 46 + 3 * 46);
 
     // chart card
-    var cx = 332, cy = 54, cw = 932, ch = 650;
+    var cx = 332, cy = 54, cw = withCard ? 620 : 932, ch = 650;
     c.fillStyle = card; rr(c, cx, cy, cw, ch, 12); c.fill(); c.strokeStyle = line; c.stroke();
     c.save(); c.translate(cx + 8, cy + 6); c.beginPath(); c.rect(0, 0, cw - 16, ch - 40); c.clip();
-    render(c, cw - 16, ch - 40, activeN(), pinnedN != null);
+    render(c, cw - 16, ch - 40, noHover ? pinnedN : activeN(), pinnedN != null);
     c.restore();
+    if (withCard){
+      var vn = cardN();
+      drawCard(c, cardRows(s, m, vn), 964, 54, 300, 22, pinnedN != null, accent, muted, vn);
+    }
     // legend
     var ly = cy + ch - 16, lx = cx + 20;
     c.font = '13px ' + F; c.textAlign = 'left'; c.fillStyle = muted;
@@ -530,6 +556,41 @@
     if (recorder && recorder.state !== 'inactive') recorder.stop();
     recBtn.classList.remove('on'); recBtn.textContent = '⏺ Record';
   }
+
+  // ===== PDF save: current state; card included only when a point is pinned =====
+  function makePdf(jpeg, iw, ih){
+    var PW = 960, PH = 540, enc = new TextEncoder(), parts = [], off = 0, xr = [];
+    var add = function(x){ var b = typeof x === 'string' ? enc.encode(x) : x; parts.push(b); off += b.length; };
+    var obj = function(n, body){ xr[n] = off; add(n + ' 0 obj\n' + body + '\nendobj\n'); };
+    add('%PDF-1.4\n');
+    obj(1, '<< /Type /Catalog /Pages 2 0 R >>');
+    obj(2, '<< /Type /Pages /Kids [3 0 R] /Count 1 >>');
+    obj(3, '<< /Type /Page /Parent 2 0 R /MediaBox [0 0 ' + PW + ' ' + PH + '] /Resources << /XObject << /Im0 4 0 R >> >> /Contents 5 0 R >>');
+    xr[4] = off;
+    add('4 0 obj\n<< /Type /XObject /Subtype /Image /Width ' + iw + ' /Height ' + ih + ' /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /DCTDecode /Length ' + jpeg.length + ' >>\nstream\n');
+    add(jpeg); add('\nendstream\nendobj\n');
+    var content = 'q ' + PW + ' 0 0 ' + PH + ' 0 0 cm /Im0 Do Q';
+    obj(5, '<< /Length ' + content.length + ' >>\nstream\n' + content + '\nendstream');
+    var xo = off; add('xref\n0 6\n0000000000 65535 f \n');
+    for (var i = 1; i <= 5; i++) add(('0000000000' + xr[i]).slice(-10) + ' 00000 n \n');
+    add('trailer\n<< /Size 6 /Root 1 0 R >>\nstartxref\n' + xo + '\n%%EOF');
+    return new Blob(parts, {type: 'application/pdf'});
+  }
+  $('pdfBtn').addEventListener('click', function(){
+    var k = document.createElement('canvas'); k.width = 2560; k.height = 1440;
+    videoFrame(k, pinnedN != null, true);
+    k.toBlob(function(b){
+      if (!b) return;
+      b.arrayBuffer().then(function(buf){
+        var blob = makePdf(new Uint8Array(buf), k.width, k.height);
+        var a = document.createElement('a');
+        a.href = URL.createObjectURL(blob);
+        a.download = 'campaign-compass-' + new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19) + '.pdf';
+        document.body.appendChild(a); a.click(); a.remove();
+        setTimeout(function(){ URL.revokeObjectURL(a.href); }, 10000);
+      });
+    }, 'image/jpeg', 0.95);
+  });
   recBtn.addEventListener('click', function(){ recording ? stopRec() : startRec(); });
 
   function onMove(e){
