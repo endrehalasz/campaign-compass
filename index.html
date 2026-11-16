@@ -598,7 +598,7 @@
     var g = cv._geom; if (!g || !lastPtr) { hoverN = null; return 0; }
     var x = lastPtr.x, y = lastPtr.y, EZ = 44, vel = 0;
     var inB = y >= g.yB0 - 6 && y <= g.yB0 + g.hB + 34;
-    if (inB){
+    if (inB && pinnedN == null){          // a pinned view stays still
       var rEdge = g.L + g.pw;
       if (x > rEdge - EZ && xOff < N_CAP - X_MAX) vel = Math.min(1.6, (x - (rEdge - EZ)) / EZ);
       else if (x < g.L + EZ && xOff > 0) vel = -Math.min(1.6, (g.L + EZ - x) / EZ);
