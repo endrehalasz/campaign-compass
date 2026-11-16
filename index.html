@@ -47,11 +47,14 @@
   .sw{width:22px;height:0;border-top:3px solid var(--accent)}
   .sw.d{border-top:2px dashed var(--axis)}
   .box{width:14px;height:14px;border-radius:3px}
+  #recBtn{position:fixed;top:12px;right:12px;z-index:10;padding:8px 14px;border-radius:999px;border:1px solid var(--line);background:var(--card);color:var(--ink);font-weight:600;font-size:13px;font-family:inherit;cursor:pointer;box-shadow:0 2px 8px rgba(0,0,0,.15)}
+  #recBtn.on{background:var(--red);border-color:var(--red);color:#fff}
   .foot{margin-top:14px;font-size:12.5px;color:var(--muted)}
   .foot code{background:var(--line);padding:1px 5px;border-radius:4px;font-size:12px}
 </style>
 </head>
 <body>
+<button id="recBtn" type="button" title="Temporary: records the page as 720p / 30fps video">⏺ Record</button>
 <div class="wrap">
   <h1>$35-250 Sales Funnel Unit Case + Campaign Compass</h1>
   <p class="sub">Move the four sliders and watch Net Profit /Month and ROI change against Target # Of Clients /Month.</p>
@@ -163,7 +166,10 @@
     cv.width = Math.round(W*dpr); cv.height = Math.round(H*dpr);
     ctx.setTransform(dpr,0,0,dpr,0,0);
     ctx.clearRect(0,0,W,H);
+    cv._geom = render(ctx, W, H, hoverN);
+  }
 
+  function render(ctx, W, H, hoverN){
     var s = state();
     var cols = {red:css('--red'), green:css('--green'), redf:css('--redfill'), greenf:css('--greenfill'),
       grid:css('--grid'), axis:css('--axis'), ink:css('--ink'), muted:css('--muted'), accent:css('--accent'), card:css('--card')};
@@ -351,8 +357,115 @@
       }
     }
 
-    cv._geom = {L:L, pw:pw};
+    return {L:L, pw:pw};
   }
+
+  // ===== TEMPORARY: screen-recording button (1280x720, 30fps) =====
+  var recBtn = $('recBtn'), recording = false, recorder = null, chunks = [], recTimer = null, recStart = 0, recCv = null, recRaf = 0;
+
+  function rr(c, x, y, w, h, r){ c.beginPath(); if (c.roundRect) c.roundRect(x, y, w, h, r); else c.rect(x, y, w, h); }
+
+  function videoFrame(){
+    var c = recCv.getContext('2d'), W = 1280, H = 720, s = state(), m = model(s.cpm, s.ctr, s.spcr, s.aov);
+    var bg = css('--bg'), card = css('--card'), ink = css('--ink'), muted = css('--muted'), line = css('--line'),
+        accent = css('--accent'), red = css('--red'), green = css('--green');
+    var F = '-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif';
+    c.setTransform(1,0,0,1,0,0);
+    c.fillStyle = bg; c.fillRect(0,0,W,H);
+    c.textBaseline = 'alphabetic'; c.textAlign = 'left';
+    c.fillStyle = ink; c.font = '700 26px ' + F;
+    c.fillText('$35-250 Sales Funnel Unit Case + Campaign Compass', 16, 38);
+
+    // left card
+    var px = 16, py = 54, pw = 300, ph = 650;
+    c.fillStyle = card; rr(c, px, py, pw, ph, 12); c.fill(); c.strokeStyle = line; c.lineWidth = 1; c.stroke();
+    var ctl = [
+      ['Cost Per 1,000 Impressions (CPM)', '$' + s.cpm.toFixed(1), (s.cpm-10)/15, '$10', '$25'],
+      ['CTR', (s.ctr*100).toFixed(1) + '%', (s.ctr*100-1)/3, '1%', '4%'],
+      ['Sales Page Conversion Rate (SPCR)', (s.spcr*100).toFixed(1) + '%', (s.spcr*100-0.5)/5.5, '0.5%', '6%'],
+      ['AOV', '$' + s.aov, (s.aov-35)/215, '$35', '$250']
+    ];
+    ctl.forEach(function(k, i){
+      var y = py + 30 + i * 84, x0 = px + 16, x1 = px + pw - 16;
+      c.fillStyle = ink; c.font = '600 13px ' + F; c.textAlign = 'left'; c.fillText(k[0], x0, y);
+      c.fillStyle = accent; c.font = '700 15px ' + F; c.textAlign = 'right'; c.fillText(k[1], x1, y + 22);
+      var ty = y + 40;
+      c.strokeStyle = line; c.lineWidth = 5; c.lineCap = 'round';
+      c.beginPath(); c.moveTo(x0, ty); c.lineTo(x1, ty); c.stroke();
+      var tx = x0 + (x1 - x0) * Math.max(0, Math.min(1, k[2]));
+      c.strokeStyle = accent; c.beginPath(); c.moveTo(x0, ty); c.lineTo(tx, ty); c.stroke();
+      c.fillStyle = accent; c.beginPath(); c.arc(tx, ty, 9, 0, 7); c.fill();
+      c.fillStyle = muted; c.font = '12px ' + F; c.textAlign = 'left'; c.fillText(k[3], x0, ty + 22);
+      c.textAlign = 'right'; c.fillText(k[4], x1, ty + 22);
+    });
+    var sy = py + 30 + 4 * 84 + 6;
+    c.strokeStyle = line; c.lineWidth = 1; c.beginPath(); c.moveTo(px + 16, sy); c.lineTo(px + pw - 16, sy); c.stroke();
+    var stats = [['CPC', usd(m.cpc)], ['CPA (Ads)', usd(m.cpa)], ['COGS', usd(m.cogs)], ['AOP (Before ad spend)', usd(m.aop)],
+                 ['AOP (after ad spend)', usd(m.aop2)], ['ROI', pct(m.roi, 1)]];
+    stats.forEach(function(st, i){
+      var sx = px + 16 + (i % 2) * 140, yy = sy + 26 + Math.floor(i / 2) * 46;
+      c.textAlign = 'left'; c.fillStyle = muted; c.font = '12px ' + F; c.fillText(st[0], sx, yy);
+      c.font = '700 16px ' + F; c.fillStyle = st[0] === 'ROI' ? (m.roi >= 1 ? green : red) : ink; c.fillText(st[1], sx, yy + 20);
+    });
+    c.textAlign = 'left'; c.fillStyle = muted; c.font = '12px ' + F; c.fillText('Avg # of impressions per sale', px + 16, sy + 26 + 3 * 46);
+    c.fillStyle = ink; c.font = '700 16px ' + F; c.fillText(Math.round(m.imp).toLocaleString('en-US'), px + 16, sy + 46 + 3 * 46);
+
+    // chart card
+    var cx = 332, cy = 54, cw = 932, ch = 650;
+    c.fillStyle = card; rr(c, cx, cy, cw, ch, 12); c.fill(); c.strokeStyle = line; c.stroke();
+    c.save(); c.translate(cx + 8, cy + 6); c.beginPath(); c.rect(0, 0, cw - 16, ch - 40); c.clip();
+    render(c, cw - 16, ch - 40, null);
+    c.restore();
+    // legend
+    var ly = cy + ch - 16, lx = cx + 20;
+    c.font = '13px ' + F; c.textAlign = 'left'; c.fillStyle = muted;
+    c.strokeStyle = accent; c.lineWidth = 3; c.setLineDash([]); c.beginPath(); c.moveTo(lx, ly - 4); c.lineTo(lx + 22, ly - 4); c.stroke();
+    c.fillText('Current SPCR', lx + 30, ly);
+    lx += 150; c.strokeStyle = css('--axis'); c.lineWidth = 2; c.setLineDash([5,4]); c.beginPath(); c.moveTo(lx, ly - 4); c.lineTo(lx + 22, ly - 4); c.stroke(); c.setLineDash([]);
+    c.fillText('SPCR 1–6%', lx + 30, ly);
+    lx += 140; c.fillStyle = css('--redfill'); c.fillRect(lx, ly - 13, 14, 14); c.strokeStyle = red; c.lineWidth = 1; c.strokeRect(lx + .5, ly - 12.5, 13, 13);
+    c.fillStyle = muted; c.fillText('ROI below 100%', lx + 22, ly);
+    lx += 150; c.fillStyle = css('--greenfill'); c.fillRect(lx, ly - 13, 14, 14); c.strokeStyle = green; c.strokeRect(lx + .5, ly - 12.5, 13, 13);
+    c.fillStyle = muted; c.fillText('ROI above 100%', lx + 22, ly);
+  }
+
+  function recLoop(){ if (!recording) return; videoFrame(); recRaf = requestAnimationFrame(recLoop); }
+
+  function startRec(){
+    if (!window.MediaRecorder) { alert('This browser does not support video recording.'); return; }
+    recCv = document.createElement('canvas'); recCv.width = 1280; recCv.height = 720;
+    videoFrame();
+    var stream = recCv.captureStream(30);
+    var types = ['video/mp4;codecs=avc1', 'video/webm;codecs=vp9', 'video/webm;codecs=vp8', 'video/webm'];
+    var mime = ''; for (var i = 0; i < types.length; i++) if (MediaRecorder.isTypeSupported(types[i])) { mime = types[i]; break; }
+    recorder = new MediaRecorder(stream, mime ? {mimeType: mime, videoBitsPerSecond: 6000000} : {videoBitsPerSecond: 6000000});
+    chunks = [];
+    recorder.ondataavailable = function(e){ if (e.data && e.data.size) chunks.push(e.data); };
+    recorder.onstop = function(){
+      var type = recorder.mimeType || mime || 'video/webm';
+      var blob = new Blob(chunks, {type: type});
+      var a = document.createElement('a'), ext = type.indexOf('mp4') >= 0 ? 'mp4' : 'webm';
+      a.href = URL.createObjectURL(blob);
+      a.download = 'campaign-compass-' + new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19) + '.' + ext;
+      document.body.appendChild(a); a.click(); a.remove();
+      setTimeout(function(){ URL.revokeObjectURL(a.href); }, 10000);
+    };
+    recorder.start(1000);
+    recording = true; recStart = Date.now();
+    recBtn.classList.add('on');
+    recTimer = setInterval(function(){
+      var t = Math.floor((Date.now() - recStart) / 1000);
+      recBtn.textContent = '⏹ Stop ' + Math.floor(t/60) + ':' + ('0' + t % 60).slice(-2);
+    }, 250);
+    recBtn.textContent = '⏹ Stop 0:00';
+    recLoop();
+  }
+  function stopRec(){
+    recording = false; cancelAnimationFrame(recRaf); clearInterval(recTimer);
+    if (recorder && recorder.state !== 'inactive') recorder.stop();
+    recBtn.classList.remove('on'); recBtn.textContent = '⏺ Record';
+  }
+  recBtn.addEventListener('click', function(){ recording ? stopRec() : startRec(); });
 
   function onMove(e){
     var g = cv._geom; if (!g) return;
