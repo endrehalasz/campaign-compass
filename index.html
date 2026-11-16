@@ -220,8 +220,8 @@
       ['ROI', (m.roi * 100).toFixed(2) + '%', LC.g, res(m.roi >= 0), '#fff', 1],
       ['Target # Of Clients /Month', n.toLocaleString('en-US'), LC.p, WH, '#000', 1],
       ['Total Ad Spend /Month', usd(ad, 2), LC.p, GR, '#000', 1],
-      ['Gross Revenue /Month', usd(rev, 2), LC.p, GR, '#000', 1, 1],
-      ['Net Profit /Month', usd(np, 2), LC.p, GR, '#000', 1],
+      ['Gross Revenue /Month', usd(rev, 2), LC.p, GR, '#000', 1],
+      ['Net Profit /Month', usd(np, 2), LC.p, GR, '#000', 1, m.roi >= 1 ? '#16a34a' : '#c81e1e'],
       ['Target # Of Clients /Week', wk(n / 4), LC.p, GR, '#000', 1],
       ['Ad Spend /Week', usd(ad / 4, 2), LC.p, GR, '#000', 1],
       ['Gross Revenue /Week', usd(rev / 4, 2), LC.p, GR, '#000', 1],
@@ -247,8 +247,8 @@
     c.textAlign = 'center';
     rows.forEach(function(r, i){
       var yy = top + i * rh, hl = r[6];
-      c.fillStyle = hl ? '#16a34a' : r[2]; c.fillRect(x, yy, lw, rh);
-      c.fillStyle = hl ? '#16a34a' : r[3]; c.fillRect(x + lw, yy, vw, rh);
+      c.fillStyle = hl || r[2]; c.fillRect(x, yy, lw, rh);
+      c.fillStyle = hl || r[3]; c.fillRect(x + lw, yy, vw, rh);
       c.strokeStyle = 'rgba(0,0,0,.55)'; c.lineWidth = 1; c.strokeRect(x + .5, yy + .5, w - 1, rh - 1);
       c.beginPath(); c.moveTo(x + lw + .5, yy); c.lineTo(x + lw + .5, yy + rh); c.stroke();
       var fs = hl ? 12.5 : 11.5, wt = hl ? '800 ' : '700 ';
@@ -258,10 +258,10 @@
       c.font = (r[5] || hl ? (hl ? '800 ' : '700 ') : '400 ') + (hl ? 13.5 : 11.5) + 'px ' + FF;
       c.fillStyle = hl ? '#fff' : r[4]; c.fillText(r[1], x + lw + vw / 2, yy + rh / 2 + .5);
     });
-    // thick frame around the highlighted Gross Revenue /Month row
+    // thick frame around the highlighted Net Profit /Month row
     rows.forEach(function(r, i){
       if (!r[6]) return;
-      c.strokeStyle = '#0b5a26'; c.lineWidth = 3; c.strokeRect(x + 1.5, top + i * rh + 1.5, w - 3, rh - 3);
+      c.strokeStyle = 'rgba(0,0,0,.75)'; c.lineWidth = 3; c.strokeRect(x + 1.5, top + i * rh + 1.5, w - 3, rh - 3);
     });
     c.strokeStyle = 'rgba(0,0,0,.8)'; c.lineWidth = 1.5; c.strokeRect(x, top, w, rows.length * rh);
     c.textAlign = 'left';
