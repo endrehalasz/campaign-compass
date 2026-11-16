@@ -50,7 +50,10 @@
   .box.hatch{border:1px solid var(--axis);background:repeating-linear-gradient(135deg,var(--axis) 0 1.4px,transparent 1.4px 5px)}
   #recBtn{display:none;position:fixed;top:12px;right:12px;z-index:10;padding:8px 14px;border-radius:999px;border:1px solid var(--line);background:var(--card);color:var(--ink);font-weight:600;font-size:13px;font-family:inherit;cursor:pointer;box-shadow:0 2px 8px rgba(0,0,0,.15)}
   #recBtn.on{background:var(--red);border-color:var(--red);color:#fff}
-  .dl{margin-top:14px;padding:9px 16px;border-radius:999px;border:1px solid var(--line);background:var(--card);color:var(--ink);font-weight:600;font-size:14px;font-family:inherit;cursor:pointer;margin-right:10px}
+  #cvWrap{position:relative}
+  #pdfBox{position:absolute;display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+  .pdfnote{font-size:11.5px;color:var(--muted)}
+  .dl{padding:8px 16px;border-radius:999px;border:1px solid var(--line);background:var(--card);color:var(--ink);font-weight:600;font-size:14px;font-family:inherit;cursor:pointer;margin-right:10px}
   .dl:hover{border-color:var(--accent)}
   .foot{margin-top:14px;font-size:12.5px;color:var(--muted)}
   .foot code{background:var(--line);padding:1px 5px;border-radius:4px;font-size:12px}
@@ -97,7 +100,9 @@
     </div>
 
     <div class="card chartcard">
-      <canvas id="cv"></canvas>
+      <div id="cvWrap"><canvas id="cv"></canvas>
+        <div id="pdfBox"><button id="pdfBtn" type="button" class="dl">⬇ Save PDF</button><span class="pdfnote">Pin a point to include the card</span></div>
+      </div>
       <div class="legend">
         <span><i class="sw"></i> Current SPCR</span>
         <span><i class="sw d"></i> SPCR 1–5%</span>
@@ -115,8 +120,6 @@
     <code>Net Profit /Month = Target # Of Clients /Month × AOP (after ad spend)</code>.
     In the upper chart the green/hatched split is the ROI = 100% line: curves steeper than it earn more than 100% ROI. Red = loss.
   </p>
-  <button id="pdfBtn" type="button" class="dl">⬇ Save PDF</button>
-  <span class="foot">Saves the current setup. Pin a point on the chart first to include the data card.</span>
 </div>
 
 <script>
@@ -176,8 +179,12 @@
     var chH = Math.round(Math.max(520, Math.min(700, cw * 0.78)));
     var rh = side ? Math.min(22, Math.floor((chH - 24) / 21)) : 18;
     var cardH = 24 + 21 * rh;
-    var H = side ? Math.max(chH, cardH) : chH + 12 + cardH;
+    var H = side ? Math.max(chH, cardH + 56) : chH + 12 + cardH + 56;
     cv.style.height = H + 'px';
+    var pb = $('pdfBox');                              // PDF button sits right under the card
+    pb.style.left = (side ? cw + gap : Math.round((Wt - cardW) / 2)) + 'px';
+    pb.style.top = ((side ? 0 : chH + 12) + cardH + 10) + 'px';
+    pb.style.width = cardW + 'px';
     cv.width = Math.round(Wt*dpr); cv.height = Math.round(H*dpr);
     ctx.setTransform(dpr,0,0,dpr,0,0);
     ctx.clearRect(0,0,Wt,H);
