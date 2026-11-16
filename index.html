@@ -1,0 +1,376 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>$35-250 Sales Funnel Unit Case + Campaign Compass</title>
+<meta name="description" content="Interactive unit-economics chart for a $35-250 online course sales funnel: tune CPM, CTR, SPCR and AOV and see Net Profit /Month and ROI against Target # Of Clients /Month.">
+<style>
+  :root{
+    --bg:#f6f7f9; --card:#ffffff; --ink:#1b2430; --muted:#5d6978; --line:#dfe3e9;
+    --accent:#2457d6; --red:#d93a3a; --green:#1f9d55;
+    --redfill:rgba(217,58,58,.14); --greenfill:rgba(31,157,85,.14);
+    --grid:#e6e9ee; --axis:#9aa4b2;
+  }
+  @media (prefers-color-scheme: dark){
+    :root{
+      --bg:#0f141b; --card:#171e28; --ink:#e8edf3; --muted:#9aa7b6; --line:#2a3442;
+      --accent:#6c9bff; --red:#ff6b6b; --green:#3ccf7e;
+      --redfill:rgba(255,107,107,.16); --greenfill:rgba(60,207,126,.15);
+      --grid:#232c39; --axis:#5c6878;
+    }
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0}
+  body{background:var(--bg);color:var(--ink);font:15px/1.45 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif}
+  .wrap{max-width:1180px;margin:0 auto;padding:20px 16px 40px}
+  h1{font-size:clamp(20px,3.2vw,30px);line-height:1.2;margin:0 0 4px}
+  .sub{color:var(--muted);margin:0 0 18px}
+  .grid{display:grid;grid-template-columns:320px 1fr;gap:16px;align-items:start}
+  @media(max-width:880px){.grid{grid-template-columns:1fr}}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:16px}
+  .ctl{margin-bottom:16px}
+  .ctl:last-of-type{margin-bottom:0}
+  .ctl .row{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:2px}
+  .ctl label{font-weight:600}
+  .ctl .val{font-variant-numeric:tabular-nums;font-weight:700;color:var(--accent)}
+  .ctl .hint{font-size:12px;color:var(--muted);margin-top:2px;display:flex;justify-content:space-between}
+  input[type=range]{width:100%;accent-color:var(--accent);height:28px;margin:0}
+  .stats{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:18px;padding-top:14px;border-top:1px solid var(--line)}
+  .stat{font-size:12px;color:var(--muted)}
+  .stat b{display:block;font-size:16px;color:var(--ink);font-variant-numeric:tabular-nums}
+  .stat.roi b.pos{color:var(--green)} .stat.roi b.neg{color:var(--red)}
+  .chartcard{padding:12px 12px 8px}
+  canvas{display:block;width:100%;touch-action:pan-y}
+  .legend{display:flex;flex-wrap:wrap;gap:6px 18px;font-size:13px;color:var(--muted);padding:8px 6px 4px}
+  .legend span{display:inline-flex;align-items:center;gap:6px}
+  .sw{width:22px;height:0;border-top:3px solid var(--accent)}
+  .sw.d{border-top:2px dashed var(--axis)}
+  .box{width:14px;height:14px;border-radius:3px}
+  .foot{margin-top:14px;font-size:12.5px;color:var(--muted)}
+  .foot code{background:var(--line);padding:1px 5px;border-radius:4px;font-size:12px}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>$35-250 Sales Funnel Unit Case + Campaign Compass</h1>
+  <p class="sub">Move the four sliders and watch Net Profit /Month and ROI change against Target # Of Clients /Month.</p>
+
+  <div class="grid">
+    <div class="card">
+      <div class="ctl">
+        <div class="row"><label for="cpm">Cost Per 1,000 Impressions (CPM)</label><span class="val" id="cpmV"></span></div>
+        <input type="range" id="cpm" min="10" max="25" step="0.5" value="15">
+        <div class="hint"><span>$10</span><span>$25</span></div>
+      </div>
+      <div class="ctl">
+        <div class="row"><label for="ctr">CTR</label><span class="val" id="ctrV"></span></div>
+        <input type="range" id="ctr" min="1" max="4" step="0.1" value="2">
+        <div class="hint"><span>1%</span><span>4%</span></div>
+      </div>
+      <div class="ctl">
+        <div class="row"><label for="spcr">Sales Page Conversion Rate (SPCR)</label><span class="val" id="spcrV"></span></div>
+        <input type="range" id="spcr" min="0.5" max="6" step="0.1" value="3">
+        <div class="hint"><span>0.5%</span><span>6%</span></div>
+      </div>
+      <div class="ctl">
+        <div class="row"><label for="aov">AOV</label><span class="val" id="aovV"></span></div>
+        <input type="range" id="aov" min="35" max="250" step="1" value="97">
+        <div class="hint"><span>$35</span><span>$250</span></div>
+      </div>
+
+      <div class="stats">
+        <div class="stat">CPC<b id="sCpc"></b></div>
+        <div class="stat">CPA (Ads)<b id="sCpa"></b></div>
+        <div class="stat">COGS<b id="sCogs"></b></div>
+        <div class="stat">AOP (Before ad spend)<b id="sAop"></b></div>
+        <div class="stat">AOP (after ad spend)<b id="sAop2"></b></div>
+        <div class="stat roi">ROI<b id="sRoi"></b></div>
+        <div class="stat" style="grid-column:1/-1">Avg # of impressions per sale<b id="sImp"></b></div>
+      </div>
+    </div>
+
+    <div class="card chartcard">
+      <canvas id="cv"></canvas>
+      <div class="legend">
+        <span><i class="sw"></i> Current SPCR</span>
+        <span><i class="sw d"></i> SPCR 1–6%</span>
+        <span><i class="box" style="background:var(--redfill);border:1px solid var(--red)"></i> ROI below 100%</span>
+        <span><i class="box" style="background:var(--greenfill);border:1px solid var(--green)"></i> ROI above 100%</span>
+      </div>
+    </div>
+  </div>
+
+  <p class="foot">
+    Formulas (from the KPIs sheet): <code>CPC = CPM / (CTR·1000)</code> · <code>CPA = CPC / SPCR</code> ·
+    <code>COGS = AOV·3% + 0.2</code> · <code>AOP = AOV − COGS − CPA</code> · <code>ROI = AOV / CPA − 100%</code> ·
+    <code>Net Profit /Month = Target # Of Clients /Month × AOP (after ad spend)</code>.
+    The red/green split in the upper chart is the ROI = 100% line: curves steeper than it earn more than 100% ROI.
+  </p>
+</div>
+
+<script>
+(function(){
+  var X_MAX = 1500, P_MAX = 25000;
+  var $ = function(id){return document.getElementById(id)};
+  var cv = $('cv'), ctx = cv.getContext('2d');
+  var hoverN = null;
+
+  function model(cpm, ctr, spcr, aov){
+    var cpc = cpm / (ctr * 1000);
+    var cpa = cpc / spcr;
+    var cogs = aov * 0.03 + 0.2;
+    var aop = aov - cogs;
+    var aop2 = aop - cpa;
+    return {cpc:cpc, cpa:cpa, cogs:cogs, aop:aop, aop2:aop2, roi: aov / cpa - 1, imp: cpa / cpm * 1000};
+  }
+  function state(){
+    return {
+      cpm:+$('cpm').value, ctr:+$('ctr').value/100, spcr:+$('spcr').value/100, aov:+$('aov').value
+    };
+  }
+  var usd = function(v,d){ d = d==null?2:d; return (v<0?'-':'')+'$'+Math.abs(v).toLocaleString('en-US',{minimumFractionDigits:d,maximumFractionDigits:d}); };
+  var pct = function(v,d){ return (v*100).toLocaleString('en-US',{minimumFractionDigits:d||0,maximumFractionDigits:d||0})+'%'; };
+
+  function css(n){ return getComputedStyle(document.documentElement).getPropertyValue(n).trim(); }
+
+  function niceStep(range, ticks){
+    var raw = range / ticks, p = Math.pow(10, Math.floor(Math.log10(raw))), f = raw / p;
+    return (f<=1?1:f<=2?2:f<=5?5:10) * p;
+  }
+
+  function update(){
+    var s = state();
+    $('cpmV').textContent = '$' + s.cpm.toFixed(1);
+    $('ctrV').textContent = (s.ctr*100).toFixed(1) + '%';
+    $('spcrV').textContent = (s.spcr*100).toFixed(1) + '%';
+    $('aovV').textContent = '$' + s.aov;
+    var m = model(s.cpm, s.ctr, s.spcr, s.aov);
+    $('sCpc').textContent = usd(m.cpc);
+    $('sCpa').textContent = usd(m.cpa);
+    $('sCogs').textContent = usd(m.cogs);
+    $('sAop').textContent = usd(m.aop);
+    $('sAop2').textContent = usd(m.aop2);
+    $('sImp').textContent = Math.round(m.imp).toLocaleString('en-US');
+    var r = $('sRoi'); r.textContent = pct(m.roi, 1); r.className = m.roi >= 1 ? 'pos' : 'neg';
+    draw();
+  }
+
+  function draw(){
+    var dpr = window.devicePixelRatio || 1;
+    var W = cv.clientWidth, H = Math.round(Math.max(520, Math.min(700, W * 0.78)));
+    cv.style.height = H + 'px';
+    cv.width = Math.round(W*dpr); cv.height = Math.round(H*dpr);
+    ctx.setTransform(dpr,0,0,dpr,0,0);
+    ctx.clearRect(0,0,W,H);
+
+    var s = state();
+    var cols = {red:css('--red'), green:css('--green'), redf:css('--redfill'), greenf:css('--greenfill'),
+      grid:css('--grid'), axis:css('--axis'), ink:css('--ink'), muted:css('--muted'), accent:css('--accent'), card:css('--card')};
+
+    var L = 62, R = 38, T = 26, gap = 46, B = 40;
+    var hA = Math.round((H - T - gap - B) * 0.6), hB = H - T - gap - B - hA;
+    var pw = W - L - R;
+    var yA0 = T, yB0 = T + hA + gap;
+
+    var xs = function(n){ return L + n / X_MAX * pw; };
+    var yA = function(p){ return yA0 + hA - p / P_MAX * hA; };
+
+    var cur = model(s.cpm, s.ctr, s.spcr, s.aov);
+    var scen = [1,2,3,4,5,6].map(function(k){ var m = model(s.cpm, s.ctr, k/100, s.aov); return {k:k, m:m, slope:m.aop2, roi:m.roi}; });
+
+    // ROI axis range
+    var roiMax = Math.max(cur.roi, 3);
+    scen.forEach(function(o){ roiMax = Math.max(roiMax, o.roi); });
+    roiMax *= 1.08;
+    var rStep = niceStep(roiMax + 1, 6);
+    var rTop = Math.ceil(roiMax / rStep) * rStep, rBot = -1;
+    var yB = function(r){ return yB0 + hB - (r - rBot) / (rTop - rBot) * hB; };
+
+    ctx.font = '12px -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif';
+    ctx.textBaseline = 'middle';
+
+    // ===== Panel A: Net Profit =====
+    ctx.save();
+    ctx.beginPath(); ctx.rect(L, yA0, pw, hA); ctx.clip();
+    // ROI=100% threshold line: P = N * (AOV/2 - COGS)
+    var thr = s.aov/2 - cur.cogs;
+    var nEnd = Math.min(X_MAX, P_MAX / thr);
+    var pEnd = Math.min(P_MAX, X_MAX * thr);
+    // green above, red below
+    ctx.fillStyle = cols.greenf;
+    ctx.beginPath(); ctx.moveTo(xs(0), yA(0)); ctx.lineTo(xs(nEnd), yA(pEnd));
+    if (nEnd < X_MAX) ctx.lineTo(xs(X_MAX), yA(P_MAX));
+    ctx.lineTo(xs(X_MAX), yA(P_MAX)); ctx.lineTo(xs(0), yA(P_MAX)); ctx.closePath(); ctx.fill();
+    ctx.fillStyle = cols.redf;
+    ctx.beginPath(); ctx.moveTo(xs(0), yA(0)); ctx.lineTo(xs(nEnd), yA(pEnd));
+    if (nEnd < X_MAX) ctx.lineTo(xs(X_MAX), yA(P_MAX));
+    ctx.lineTo(xs(X_MAX), yA(0)); ctx.closePath(); ctx.fill();
+    ctx.restore();
+
+    // grid + ticks A
+    ctx.strokeStyle = cols.grid; ctx.lineWidth = 1; ctx.fillStyle = cols.muted; ctx.textAlign = 'right';
+    for (var p = 0; p <= P_MAX; p += 5000){
+      var y = Math.round(yA(p)) + .5;
+      ctx.beginPath(); ctx.moveTo(L, y); ctx.lineTo(L+pw, y); ctx.stroke();
+      ctx.fillText('$' + (p/1000) + 'k', L - 8, y);
+    }
+    ctx.textAlign = 'center'; ctx.textBaseline = 'top';
+    for (var n = 0; n <= X_MAX; n += 250){
+      var x = Math.round(xs(n)) + .5;
+      ctx.beginPath(); ctx.moveTo(x, yA0); ctx.lineTo(x, yA0+hA); ctx.stroke();
+    }
+    ctx.textBaseline = 'middle';
+
+    // curves A
+    ctx.save();
+    ctx.beginPath(); ctx.rect(L, yA0 - 2, pw + 1, hA + 4); ctx.clip();
+    ctx.lineWidth = 1.6; ctx.setLineDash([6,5]); ctx.strokeStyle = cols.axis;
+    scen.forEach(function(o){
+      if (o.slope <= 0) return;
+      var ne = Math.min(X_MAX, P_MAX / o.slope);
+      ctx.beginPath(); ctx.moveTo(xs(0), yA(0)); ctx.lineTo(xs(ne), yA(o.slope * ne)); ctx.stroke();
+    });
+    ctx.setLineDash([]);
+    ctx.lineWidth = 3.4; ctx.strokeStyle = cols.accent;
+    var ec = cur.aop2 > 0 ? Math.min(X_MAX, P_MAX / cur.aop2) : X_MAX;
+    ctx.beginPath(); ctx.moveTo(xs(0), yA(0));
+    if (cur.aop2 >= 0) ctx.lineTo(xs(ec), yA(cur.aop2 * ec));
+    else ctx.lineTo(xs(X_MAX), yA(0)); // negative profit runs below the visible axis
+    ctx.stroke();
+    ctx.restore();
+
+    // dashed labels A
+    ctx.font = '600 11px -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif';
+    ctx.fillStyle = cols.muted; ctx.textAlign = 'left';
+    var lastLx = -99, stack = 0;
+    scen.slice().sort(function(a,b){ return b.slope - a.slope; }).forEach(function(o){
+      if (o.slope <= 0) return;
+      var ne = Math.min(X_MAX, P_MAX / o.slope), pe = o.slope * ne;
+      var lx = xs(ne), ly = yA(pe);
+      if (ne >= X_MAX - 0.5) { ctx.textAlign = 'left'; ctx.fillText(o.k + '%', Math.min(lx + 4, W - 30), ly); }
+      else {
+        stack = (Math.abs(lx - lastLx) < 26) ? stack + 1 : 0;
+        ctx.textAlign = 'center'; ctx.fillText(o.k + '%', lx - stack * 0, ly - 8 - stack * 12);
+        lastLx = lx;
+      }
+    });
+    ctx.textAlign = 'left';
+    ctx.font = '12px -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif';
+
+    // title A + threshold label
+    ctx.fillStyle = cols.ink; ctx.textAlign = 'left'; ctx.font = '600 13px -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif';
+    ctx.fillText('Net Profit /Month', L, yA0 - 12);
+    ctx.font = '12px -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif';
+    if (cur.aop2 < 0){
+      ctx.fillStyle = cols.red; ctx.textAlign = 'right';
+      ctx.fillText('Current SPCR is below break-even (negative profit)', L + pw - 8, yA0 + 14);
+    }
+    // axes A
+    ctx.strokeStyle = cols.axis; ctx.lineWidth = 1.2;
+    ctx.strokeRect(L + .5, yA0 + .5, pw, hA);
+
+    // ===== Panel B: ROI =====
+    ctx.save();
+    ctx.beginPath(); ctx.rect(L, yB0, pw, hB); ctx.clip();
+    ctx.fillStyle = cols.greenf; ctx.fillRect(L, yB0, pw, yB(1) - yB0);
+    ctx.fillStyle = cols.redf; ctx.fillRect(L, yB(1), pw, yB0 + hB - yB(1));
+    ctx.restore();
+
+    ctx.strokeStyle = cols.grid; ctx.lineWidth = 1; ctx.fillStyle = cols.muted; ctx.textAlign = 'right'; ctx.textBaseline = 'middle';
+    var rTicks = [-1];
+    for (var rt = 0; rt <= rTop + 1e-9; rt += rStep) rTicks.push(rt);
+    rTicks.forEach(function(r){
+      var yy = Math.round(yB(r)) + .5;
+      ctx.beginPath(); ctx.moveTo(L, yy); ctx.lineTo(L+pw, yy); ctx.stroke();
+      ctx.fillText(pct(r), L - 8, yy);
+    });
+    for (var n2 = 0; n2 <= X_MAX; n2 += 250){
+      var xx = Math.round(xs(n2)) + .5;
+      ctx.beginPath(); ctx.moveTo(xx, yB0); ctx.lineTo(xx, yB0+hB); ctx.stroke();
+      ctx.fillStyle = cols.muted; ctx.textAlign = 'center'; ctx.textBaseline = 'top';
+      ctx.fillText(n2.toLocaleString('en-US'), xx, yB0 + hB + 8);
+    }
+    ctx.textBaseline = 'middle';
+
+    // 100% line
+    ctx.strokeStyle = cols.ink; ctx.globalAlpha = .55; ctx.lineWidth = 1.2;
+    ctx.beginPath(); ctx.moveTo(L, yB(1)); ctx.lineTo(L+pw, yB(1)); ctx.stroke(); ctx.globalAlpha = 1;
+    ctx.fillStyle = cols.ink; ctx.textAlign = 'left'; ctx.font = '600 11px -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif';
+    ctx.fillText('ROI = 100%', L + 6, yB(1) - 8);
+
+    // ROI curves (flat in clients)
+    ctx.save();
+    ctx.beginPath(); ctx.rect(L, yB0 - 2, pw + 40, hB + 4); ctx.clip();
+    ctx.lineWidth = 1.6; ctx.setLineDash([6,5]); ctx.strokeStyle = cols.axis;
+    scen.forEach(function(o){ ctx.beginPath(); ctx.moveTo(xs(0), yB(o.roi)); ctx.lineTo(xs(X_MAX), yB(o.roi)); ctx.stroke(); });
+    ctx.setLineDash([]); ctx.lineWidth = 3.4; ctx.strokeStyle = cols.accent;
+    ctx.beginPath(); ctx.moveTo(xs(0), yB(cur.roi)); ctx.lineTo(xs(X_MAX), yB(cur.roi)); ctx.stroke();
+    ctx.restore();
+    ctx.fillStyle = cols.muted; ctx.textAlign = 'left';
+    scen.forEach(function(o){ ctx.fillText(o.k + '%', xs(X_MAX) + 5, yB(o.roi)); });
+
+    ctx.font = '600 13px -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif';
+    ctx.fillStyle = cols.ink; ctx.textAlign = 'left';
+    ctx.fillText('ROI', L, yB0 - 12);
+    ctx.font = '12px -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif';
+    ctx.fillStyle = cur.roi >= 1 ? cols.green : cols.red; ctx.textAlign = 'right';
+    ctx.font = '700 12px -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif';
+    ctx.fillText('Current: ' + pct(cur.roi, 1), L + pw, yB0 - 12);
+    ctx.strokeStyle = cols.axis; ctx.lineWidth = 1.2;
+    ctx.strokeRect(L + .5, yB0 + .5, pw, hB);
+
+    // x axis title
+    ctx.font = '600 13px -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif';
+    ctx.fillStyle = cols.ink; ctx.textAlign = 'center'; ctx.textBaseline = 'alphabetic';
+    ctx.fillText('Target # Of Clients /Month', L + pw/2, H - 6);
+
+    // hover
+    if (hoverN != null){
+      var hx = xs(hoverN);
+      ctx.strokeStyle = cols.ink; ctx.globalAlpha = .5; ctx.lineWidth = 1; ctx.setLineDash([3,3]);
+      ctx.beginPath(); ctx.moveTo(hx, yA0); ctx.lineTo(hx, yB0 + hB); ctx.stroke();
+      ctx.setLineDash([]); ctx.globalAlpha = 1;
+      var prof = cur.aop2 * hoverN;
+      var lines = ['Clients: ' + Math.round(hoverN).toLocaleString('en-US'),
+                   'Net Profit: ' + usd(prof, 0),
+                   'ROI: ' + pct(cur.roi, 1),
+                   'Ad Spend: ' + usd(cur.cpa * hoverN, 0),
+                   'Revenue: ' + usd(s.aov * hoverN, 0)];
+      ctx.font = '12px -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif';
+      var bw = 0; lines.forEach(function(t){ bw = Math.max(bw, ctx.measureText(t).width); }); bw += 18;
+      var bh = lines.length * 17 + 12;
+      var bx = hx + 12; if (bx + bw > L + pw) bx = hx - 12 - bw;
+      var by = yA0 + 8;
+      ctx.fillStyle = cols.card; ctx.strokeStyle = cols.axis; ctx.lineWidth = 1;
+      ctx.beginPath(); ctx.roundRect ? ctx.roundRect(bx, by, bw, bh, 8) : ctx.rect(bx, by, bw, bh); ctx.fill(); ctx.stroke();
+      ctx.fillStyle = cols.ink; ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
+      lines.forEach(function(t, i){ ctx.fillText(t, bx + 9, by + 16 + i * 17); });
+      if (prof >= 0 && prof <= P_MAX){
+        ctx.fillStyle = cols.accent; ctx.beginPath(); ctx.arc(hx, yA(prof), 5, 0, 7); ctx.fill();
+      }
+    }
+
+    cv._geom = {L:L, pw:pw};
+  }
+
+  function onMove(e){
+    var g = cv._geom; if (!g) return;
+    var rect = cv.getBoundingClientRect();
+    var x = e.clientX - rect.left;
+    var n = (x - g.L) / g.pw * X_MAX;
+    hoverN = (n < 0 || n > X_MAX) ? null : n;
+    draw();
+  }
+  cv.addEventListener('pointermove', onMove);
+  cv.addEventListener('pointerdown', onMove);
+  cv.addEventListener('pointerleave', function(){ hoverN = null; draw(); });
+
+  ['cpm','ctr','spcr','aov'].forEach(function(id){ $(id).addEventListener('input', update); });
+  window.addEventListener('resize', draw);
+  if (window.matchMedia) window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', draw);
+  update();
+})();
+</script>
+</body>
+</html>
