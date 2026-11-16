@@ -500,10 +500,23 @@
     var sc = cvs.width / 1280; c.setTransform(sc,0,0,sc,0,0);
     c.fillStyle = bg; c.fillRect(0,0,W,H);
     c.textBaseline = 'alphabetic'; c.textAlign = 'left';
-    c.fillStyle = ink; c.font = '700 26px ' + F;
-    c.fillText('$35-250 Sales Funnel Unit Case + Campaign Compass', 16, 38);
+    c.fillStyle = ink; c.font = '700 24px ' + F;
+    c.fillText('$35-250 Sales Funnel Unit Case + Campaign Compass', 16, 28);
     var ttw = c.measureText('$35-250 Sales Funnel Unit Case + Campaign Compass').width;
-    c.font = '600 11px ' + F; c.fillText('\u2122', 16 + ttw + 2, 22);
+    c.font = '600 11px ' + F; c.fillText('\u2122', 16 + ttw + 2, 13);
+    // owner line (+ link rectangles, used by the PDF)
+    var links = [], ox0 = 16, oy0 = 46;
+    [['The calculation is the property of ', 0], ['Content Creator', 1], [' \u2014 this is a visual copy of their sheet. ', 0], ['contentcreator.com', 1]].forEach(function(seg){
+      c.font = '500 12.5px ' + F; var tw2 = c.measureText(seg[0]).width;
+      c.fillStyle = seg[1] ? accent : muted; c.fillText(seg[0], ox0, oy0);
+      if (seg[1]){
+        c.strokeStyle = accent; c.lineWidth = 1; c.beginPath(); c.moveTo(ox0, oy0 + 2.5); c.lineTo(ox0 + tw2, oy0 + 2.5); c.stroke();
+        links.push({x: ox0, y: oy0 - 12, w: tw2, h: 17});
+      }
+      ox0 += tw2;
+    });
+    cvs._links = links;
+    c.fillStyle = ink;
 
     // left card
     var px = 16, py = 54, pw = 300, ph = 650;
@@ -644,22 +657,30 @@
   }
 
   // ===== PDF save: current state; card included only when a point is pinned =====
-  function makePdf(jpeg, iw, ih){
+  function makePdf(jpeg, iw, ih, links){
     var PW = 960, PH = 540, enc = new TextEncoder(), parts = [], off = 0, xr = [];
     var add = function(x){ var b = typeof x === 'string' ? enc.encode(x) : x; parts.push(b); off += b.length; };
     var obj = function(n, body){ xr[n] = off; add(n + ' 0 obj\n' + body + '\nendobj\n'); };
     add('%PDF-1.4\n');
     obj(1, '<< /Type /Catalog /Pages 2 0 R >>');
     obj(2, '<< /Type /Pages /Kids [3 0 R] /Count 1 >>');
-    obj(3, '<< /Type /Page /Parent 2 0 R /MediaBox [0 0 ' + PW + ' ' + PH + '] /Resources << /XObject << /Im0 4 0 R >> >> /Contents 5 0 R >>');
+    links = links || [];
+    var annRefs = links.map(function(_, i){ return (6 + i) + ' 0 R'; }).join(' ');
+    obj(3, '<< /Type /Page /Parent 2 0 R /MediaBox [0 0 ' + PW + ' ' + PH + '] /Resources << /XObject << /Im0 4 0 R >> >> /Contents 5 0 R' + (annRefs ? ' /Annots [' + annRefs + ']' : '') + ' >>');
     xr[4] = off;
     add('4 0 obj\n<< /Type /XObject /Subtype /Image /Width ' + iw + ' /Height ' + ih + ' /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /DCTDecode /Length ' + jpeg.length + ' >>\nstream\n');
     add(jpeg); add('\nendstream\nendobj\n');
     var content = 'q ' + PW + ' 0 0 ' + PH + ' 0 0 cm /Im0 Do Q';
     obj(5, '<< /Length ' + content.length + ' >>\nstream\n' + content + '\nendstream');
-    var xo = off; add('xref\n0 6\n0000000000 65535 f \n');
-    for (var i = 1; i <= 5; i++) add(('0000000000' + xr[i]).slice(-10) + ' 00000 n \n');
-    add('trailer\n<< /Size 6 /Root 1 0 R >>\nstartxref\n' + xo + '\n%%EOF');
+    var k2 = PW / 1280;
+    links.forEach(function(l, i){
+      var x1 = (l.x * k2).toFixed(2), x2 = ((l.x + l.w) * k2).toFixed(2), y2 = (PH - l.y * k2).toFixed(2), y1 = (PH - (l.y + l.h) * k2).toFixed(2);
+      obj(6 + i, '<< /Type /Annot /Subtype /Link /Rect [' + x1 + ' ' + y1 + ' ' + x2 + ' ' + y2 + '] /Border [0 0 0] /A << /S /URI /URI (https://www.contentcreator.com/) >> >>');
+    });
+    var nObj = 5 + links.length;
+    var xo = off; add('xref\n0 ' + (nObj + 1) + '\n0000000000 65535 f \n');
+    for (var i = 1; i <= nObj; i++) add(('0000000000' + xr[i]).slice(-10) + ' 00000 n \n');
+    add('trailer\n<< /Size ' + (nObj + 1) + ' /Root 1 0 R >>\nstartxref\n' + xo + '\n%%EOF');
     return new Blob(parts, {type: 'application/pdf'});
   }
   $('pdfBtn').addEventListener('click', function(){
@@ -668,7 +689,7 @@
     k.toBlob(function(b){
       if (!b) return;
       b.arrayBuffer().then(function(buf){
-        var blob = makePdf(new Uint8Array(buf), k.width, k.height);
+        var blob = makePdf(new Uint8Array(buf), k.width, k.height, k._links);
         var a = document.createElement('a');
         a.href = URL.createObjectURL(blob);
         a.download = 'campaign-compass-' + new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19) + '.pdf';
