@@ -100,6 +100,7 @@
         <span><i class="sw d"></i> SPCR 1–6%</span>
         <span><i class="box" style="background:var(--redfill);border:1px solid var(--red)"></i> ROI below 100%</span>
         <span><i class="box" style="background:var(--greenfill);border:1px solid var(--green)"></i> ROI above 100%</span>
+        <span>Hover for details · click to pin / release</span>
       </div>
     </div>
   </div>
@@ -117,7 +118,8 @@
   var X_MAX = 1500, P_MAX = 25000;
   var $ = function(id){return document.getElementById(id)};
   var cv = $('cv'), ctx = cv.getContext('2d');
-  var hoverN = null;
+  var hoverN = null, pinnedN = null;
+  var activeN = function(){ return pinnedN != null ? pinnedN : hoverN; };
 
   function model(cpm, ctr, spcr, aov){
     var cpc = cpm / (ctr * 1000);
@@ -166,10 +168,83 @@
     cv.width = Math.round(W*dpr); cv.height = Math.round(H*dpr);
     ctx.setTransform(dpr,0,0,dpr,0,0);
     ctx.clearRect(0,0,W,H);
-    cv._geom = render(ctx, W, H, hoverN);
+    cv._geom = render(ctx, W, H, activeN(), pinnedN != null);
   }
 
-  function render(ctx, W, H, hoverN){
+  // Card in the look of the KPIs sheet (label colours, white input cells, grey calculated cells, red/green results)
+  function cardRows(s, m, n){
+    var LC = {r:'#e06666', o:'#f6b26b', g:'#38761d', b:'#0b5394', p:'#741b47'};
+    var WH = '#ffffff', GR = '#d9d9d9', NEG = '#990000', POS = '#38761d';
+    var sp = s.spcr * 100;
+    var spS = (Math.abs(sp - Math.round(sp)) < 1e-9 ? sp.toFixed(0) : sp.toFixed(1)) + '%';
+    var ad = m.cpa * n, rev = s.aov * n, np = m.aop2 * n;
+    var wk = function(v){ return (Math.round(v * 100) / 100).toLocaleString('en-US'); };
+    var res = function(ok){ return ok ? POS : NEG; };
+    // [label, value, labelColour, valueBg, valueFg, bold]
+    return [
+      ['Cost Per 1,000 Impressions (CPM)', usd(s.cpm, 2), LC.r, WH, '#000', 1],
+      ['Average # of impressions per sale', Math.round(m.imp).toLocaleString('en-US'), LC.r, GR, '#000', 1],
+      ['CTR', (s.ctr * 100).toFixed(2) + '%', LC.o, WH, '#000', 1],
+      ['CPC', usd(m.cpc, 2), LC.o, GR, '#000', 0],
+      ['Average # of clicks per sale', Math.round(1 / s.spcr).toLocaleString('en-US'), LC.o, GR, '#000', 0],
+      ['Sales Page Conversion Rate (SPCR)', spS, LC.g, WH, '#000', 1],
+      ['CPA (Ads)', usd(m.cpa, 2), LC.g, GR, '#000', 0],
+      ['AOV', usd(s.aov, 2), LC.b, WH, '#000', 1],
+      ['COGS', usd(m.cogs, 2), LC.b, GR, '#000', 1],
+      ['AOP (Before ad spend)', usd(m.aop, 2), LC.b, GR, '#000', 1],
+      ['AOP (after ad spend)', usd(m.aop2, 2), LC.g, res(m.aop2 >= 0), '#fff', 1],
+      ['ROI', (m.roi * 100).toFixed(2) + '%', LC.g, res(m.roi >= 0), '#fff', 1],
+      ['Target # Of Clients /Month', n.toLocaleString('en-US'), LC.p, WH, '#000', 1],
+      ['Total Ad Spend /Month', usd(ad, 2), LC.p, GR, '#000', 1],
+      ['Gross Revenue /Month', usd(rev, 2), LC.p, GR, '#000', 1],
+      ['Net Profit /Month', usd(np, 2), LC.p, GR, '#000', 1],
+      ['Target # Of Clients /Week', wk(n / 4), LC.p, GR, '#000', 1],
+      ['Ad Spend /Week', usd(ad / 4, 2), LC.p, GR, '#000', 1],
+      ['Gross Revenue /Week', usd(rev / 4, 2), LC.p, GR, '#000', 1],
+      ['Net Profit /Week', usd(np / 4, 2), LC.p, GR, '#000', 1]
+    ];
+  }
+
+  function drawCard(c, rows, ax, ay, bd, pinned, accent){
+    var FF = '-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif';
+    var narrow = (bd.x1 - bd.x0) < 700;
+    var ncol = narrow ? 1 : 2, rh = narrow ? 17 : 20, lw = narrow ? 186 : 218, vw = narrow ? 76 : 88;
+    var per = narrow ? rows.length : 12;
+    var w = (lw + vw) * ncol, h = per * rh;
+    var bx = ax + 16; if (bx + w > bd.x1) bx = ax - 16 - w; if (bx < bd.x0) bx = Math.max(2, bd.x1 - w);
+    var by = Math.max(bd.y0 + 2, Math.min(bd.y1 - h - 2, ay - h / 2));
+    c.save();
+    c.shadowColor = 'rgba(0,0,0,.4)'; c.shadowBlur = 14; c.shadowOffsetY = 3;
+    c.fillStyle = '#d9d9d9'; c.fillRect(bx, by, lw + vw, h);
+    if (ncol === 2) c.fillRect(bx + lw + vw, by, lw + vw, (rows.length - per) * rh);
+    c.restore();
+    c.textAlign = 'center'; c.textBaseline = 'middle';
+    rows.forEach(function(r, i){
+      var col = narrow ? 0 : (i < per ? 0 : 1), row = narrow ? i : (i < per ? i : i - per);
+      var x = bx + col * (lw + vw), y = by + row * rh;
+      c.fillStyle = r[2]; c.fillRect(x, y, lw, rh);
+      c.fillStyle = r[3]; c.fillRect(x + lw, y, vw, rh);
+      c.strokeStyle = 'rgba(0,0,0,.55)'; c.lineWidth = 1; c.strokeRect(x + .5, y + .5, lw + vw - 1, rh - 1);
+      c.beginPath(); c.moveTo(x + lw + .5, y); c.lineTo(x + lw + .5, y + rh); c.stroke();
+      var fs = narrow ? 10.5 : 11.5;
+      c.font = '700 ' + fs + 'px ' + FF;
+      while (fs > 8 && c.measureText(r[0]).width > lw - 8) { fs -= .5; c.font = '700 ' + fs + 'px ' + FF; }
+      c.fillStyle = '#fff'; c.fillText(r[0], x + lw / 2, y + rh / 2 + .5);
+      c.font = (r[5] ? '700 ' : '400 ') + (narrow ? 10.5 : 11.5) + 'px ' + FF;
+      c.fillStyle = r[4]; c.fillText(r[1], x + lw + vw / 2, y + rh / 2 + .5);
+    });
+    c.strokeStyle = pinned ? accent : 'rgba(0,0,0,.8)'; c.lineWidth = pinned ? 3 : 1.5;
+    c.strokeRect(bx, by, lw + vw, h);
+    if (ncol === 2) c.strokeRect(bx + lw + vw, by, lw + vw, (rows.length - per) * rh);
+    if (pinned){
+      c.fillStyle = accent; c.font = '700 10px ' + FF; c.textAlign = 'left';
+      var tw = c.measureText('PINNED – click to release').width + 12;
+      c.fillRect(bx, by - 15, tw, 15); c.fillStyle = '#fff'; c.textBaseline = 'middle'; c.fillText('PINNED – click to release', bx + 6, by - 7.5);
+    }
+    c.textAlign = 'left';
+  }
+
+  function render(ctx, W, H, hoverN, isPinned){
     var s = state();
     var cols = {red:css('--red'), green:css('--green'), redf:css('--redfill'), greenf:css('--greenfill'),
       grid:css('--grid'), axis:css('--axis'), ink:css('--ink'), muted:css('--muted'), accent:css('--accent'), card:css('--card')};
@@ -333,28 +408,18 @@
 
     // hover
     if (hoverN != null){
-      var hx = xs(hoverN);
+      var nn = Math.max(0, Math.min(X_MAX, Math.round(hoverN)));
+      var hx = xs(nn);
       ctx.strokeStyle = cols.ink; ctx.globalAlpha = .5; ctx.lineWidth = 1; ctx.setLineDash([3,3]);
       ctx.beginPath(); ctx.moveTo(hx, yA0); ctx.lineTo(hx, yB0 + hB); ctx.stroke();
       ctx.setLineDash([]); ctx.globalAlpha = 1;
-      var prof = cur.aop2 * hoverN;
-      var lines = ['Clients: ' + Math.round(hoverN).toLocaleString('en-US'),
-                   'Net Profit: ' + usd(prof, 0),
-                   'ROI: ' + pct(cur.roi, 1),
-                   'Ad Spend: ' + usd(cur.cpa * hoverN, 0),
-                   'Revenue: ' + usd(s.aov * hoverN, 0)];
-      ctx.font = '12px -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif';
-      var bw = 0; lines.forEach(function(t){ bw = Math.max(bw, ctx.measureText(t).width); }); bw += 18;
-      var bh = lines.length * 17 + 12;
-      var bx = hx + 12; if (bx + bw > L + pw) bx = hx - 12 - bw;
-      var by = yA0 + 8;
-      ctx.fillStyle = cols.card; ctx.strokeStyle = cols.axis; ctx.lineWidth = 1;
-      ctx.beginPath(); ctx.roundRect ? ctx.roundRect(bx, by, bw, bh, 8) : ctx.rect(bx, by, bw, bh); ctx.fill(); ctx.stroke();
-      ctx.fillStyle = cols.ink; ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
-      lines.forEach(function(t, i){ ctx.fillText(t, bx + 9, by + 16 + i * 17); });
-      if (prof >= 0 && prof <= P_MAX){
-        ctx.fillStyle = cols.accent; ctx.beginPath(); ctx.arc(hx, yA(prof), 5, 0, 7); ctx.fill();
-      }
+      var prof = cur.aop2 * nn;
+      var py = yA(Math.max(0, Math.min(P_MAX, prof)));
+      ctx.fillStyle = cols.accent; ctx.strokeStyle = cols.card; ctx.lineWidth = isPinned ? 3 : 2;
+      ctx.beginPath(); ctx.arc(hx, py, isPinned ? 7 : 5, 0, 7); ctx.fill(); ctx.stroke();
+      // same dot on the ROI line
+      ctx.beginPath(); ctx.arc(hx, Math.max(yB0, Math.min(yB0 + hB, yB(cur.roi))), isPinned ? 6 : 4, 0, 7); ctx.fill(); ctx.stroke();
+      drawCard(ctx, cardRows(s, cur, nn), hx, py, {x0: L, y0: yA0, x1: L + pw + R - 6, y1: yB0 + hB}, isPinned, cols.accent);
     }
 
     return {L:L, pw:pw};
@@ -414,7 +479,7 @@
     var cx = 332, cy = 54, cw = 932, ch = 650;
     c.fillStyle = card; rr(c, cx, cy, cw, ch, 12); c.fill(); c.strokeStyle = line; c.stroke();
     c.save(); c.translate(cx + 8, cy + 6); c.beginPath(); c.rect(0, 0, cw - 16, ch - 40); c.clip();
-    render(c, cw - 16, ch - 40, null);
+    render(c, cw - 16, ch - 40, activeN(), pinnedN != null);
     c.restore();
     // legend
     var ly = cy + ch - 16, lx = cx + 20;
@@ -478,6 +543,14 @@
   cv.addEventListener('pointermove', onMove);
   cv.addEventListener('pointerdown', onMove);
   cv.addEventListener('pointerleave', function(){ hoverN = null; draw(); });
+  // click = pin the card at that point; click again = release
+  cv.addEventListener('click', function(e){
+    var g = cv._geom; if (!g) return;
+    var n = (e.clientX - cv.getBoundingClientRect().left - g.L) / g.pw * X_MAX;
+    if (pinnedN != null) { pinnedN = null; hoverN = (n < 0 || n > X_MAX) ? null : n; }
+    else if (n >= 0 && n <= X_MAX) { pinnedN = n; }
+    draw();
+  });
 
   ['cpm','ctr','spcr','aov'].forEach(function(id){ $(id).addEventListener('input', update); });
   window.addEventListener('resize', draw);
