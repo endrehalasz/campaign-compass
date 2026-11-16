@@ -221,7 +221,7 @@
       ['Target # Of Clients /Month', n.toLocaleString('en-US'), LC.p, WH, '#000', 1],
       ['Total Ad Spend /Month', usd(ad, 2), LC.p, GR, '#000', 1],
       ['Gross Revenue /Month', usd(rev, 2), LC.p, GR, '#000', 1],
-      ['Net Profit /Month', usd(np, 2), LC.p, GR, '#000', 1, m.roi >= 1 ? '#16a34a' : '#c81e1e'],
+      ['Net Profit /Month', usd(np, 2), LC.p, GR, '#000', 1, np >= 0 ? '#16a34a' : '#c81e1e'],
       ['Target # Of Clients /Week', wk(n / 4), LC.p, GR, '#000', 1],
       ['Ad Spend /Week', usd(ad / 4, 2), LC.p, GR, '#000', 1],
       ['Gross Revenue /Week', usd(rev / 4, 2), LC.p, GR, '#000', 1],
