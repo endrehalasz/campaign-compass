@@ -99,10 +99,10 @@
       <canvas id="cv"></canvas>
       <div class="legend">
         <span><i class="sw"></i> Current SPCR</span>
-        <span><i class="sw d"></i> SPCR 1–6%</span>
+        <span><i class="sw d"></i> SPCR 1–5%</span>
         <span><i class="box" style="background:var(--redfill);border:1px solid var(--red)"></i> ROI below 100%</span>
         <span><i class="box" style="background:var(--greenfill);border:1px solid var(--green)"></i> ROI above 100%</span>
-        <span>Hover for details · click to pin / release</span>
+        <span>Hover for details · click to pin / release · push against the ROI chart's left/right edge to scroll</span>
       </div>
     </div>
   </div>
@@ -123,6 +123,7 @@
   var $ = function(id){return document.getElementById(id)};
   var cv = $('cv'), ctx = cv.getContext('2d');
   var hoverN = null, pinnedN = null;
+  var xOff = 0, N_CAP = 5000;           // horizontal scroll offset of the view (clients); view span stays X_MAX
   var activeN = function(){ return pinnedN != null ? pinnedN : hoverN; };
 
   function model(cpm, ctr, spcr, aov){
@@ -190,7 +191,7 @@
   var lastN = 100;
   function cardN(){
     var a = activeN();
-    if (a != null) lastN = Math.max(0, Math.min(X_MAX, Math.round(a)));
+    if (a != null) lastN = Math.max(0, Math.min(N_CAP, Math.round(a)));
     return lastN;
   }
 
@@ -276,11 +277,15 @@
     var pw = W - L - R;
     var yA0 = T, yB0 = T + hA + gap;
 
-    var xs = function(n){ return L + n / X_MAX * pw; };
-    var yA = function(p){ return yA0 + hA - p / P_MAX * hA; };
-
     var cur = model(s.cpm, s.ctr, s.spcr, s.aov);
-    var scen = [1,2,3,4,5,6].map(function(k){ var m = model(s.cpm, s.ctr, k/100, s.aov); return {k:k, m:m, slope:m.aop2, roi:m.roi}; });
+    // scrolling view: x offset is shared by both panels, y window follows the hovered point (span stays P_MAX)
+    var nL = xOff, nR = xOff + X_MAX;
+    var nAct = hoverN != null ? Math.max(0, Math.min(N_CAP, Math.round(hoverN))) : null;
+    var yMin = (nAct != null && cur.aop2 > 0) ? Math.max(0, cur.aop2 * nAct - 0.96 * P_MAX) : 0;
+    var yMax = yMin + P_MAX;
+    var xs = function(n){ return L + (n - nL) / X_MAX * pw; };
+    var yA = function(p){ return yA0 + hA - (p - yMin) / P_MAX * hA; };
+    var scen = [1,2,3,4,5].map(function(k){ var m = model(s.cpm, s.ctr, k/100, s.aov); return {k:k, m:m, slope:m.aop2, roi:m.roi}; });
 
     // ROI axis range
     var roiMax = Math.max(cur.roi, 3);
@@ -298,28 +303,22 @@
     ctx.beginPath(); ctx.rect(L, yA0, pw, hA); ctx.clip();
     // ROI=100% threshold line: P = N * (AOV/2 - COGS)
     var thr = s.aov/2 - cur.cogs;
-    var nEnd = Math.min(X_MAX, P_MAX / thr);
-    var pEnd = Math.min(P_MAX, X_MAX * thr);
-    // green above, red below
+    var tA = thr * nL, tB = thr * nR, yUp = yMax + P_MAX, yDn = yMin - P_MAX;
     ctx.fillStyle = cols.greenf;
-    ctx.beginPath(); ctx.moveTo(xs(0), yA(0)); ctx.lineTo(xs(nEnd), yA(pEnd));
-    if (nEnd < X_MAX) ctx.lineTo(xs(X_MAX), yA(P_MAX));
-    ctx.lineTo(xs(X_MAX), yA(P_MAX)); ctx.lineTo(xs(0), yA(P_MAX)); ctx.closePath(); ctx.fill();
+    ctx.beginPath(); ctx.moveTo(xs(nL), yA(tA)); ctx.lineTo(xs(nR), yA(tB)); ctx.lineTo(xs(nR), yA(yUp)); ctx.lineTo(xs(nL), yA(yUp)); ctx.closePath(); ctx.fill();
     ctx.fillStyle = cols.redf;
-    ctx.beginPath(); ctx.moveTo(xs(0), yA(0)); ctx.lineTo(xs(nEnd), yA(pEnd));
-    if (nEnd < X_MAX) ctx.lineTo(xs(X_MAX), yA(P_MAX));
-    ctx.lineTo(xs(X_MAX), yA(0)); ctx.closePath(); ctx.fill();
+    ctx.beginPath(); ctx.moveTo(xs(nL), yA(tA)); ctx.lineTo(xs(nR), yA(tB)); ctx.lineTo(xs(nR), yA(yDn)); ctx.lineTo(xs(nL), yA(yDn)); ctx.closePath(); ctx.fill();
     ctx.restore();
 
     // grid + ticks A
     ctx.strokeStyle = cols.grid; ctx.lineWidth = 1; ctx.fillStyle = cols.muted; ctx.textAlign = 'right';
-    for (var p = 0; p <= P_MAX; p += 5000){
+    for (var p = Math.ceil(yMin / 5000) * 5000; p <= yMax + 1e-6; p += 5000){
       var y = Math.round(yA(p)) + .5;
       ctx.beginPath(); ctx.moveTo(L, y); ctx.lineTo(L+pw, y); ctx.stroke();
       ctx.fillText('$' + (p/1000) + 'k', L - 8, y);
     }
     ctx.textAlign = 'center'; ctx.textBaseline = 'top';
-    for (var n = 0; n <= X_MAX; n += 250){
+    for (var n = Math.ceil(nL / 250) * 250; n <= nR + 1e-6; n += 250){
       var x = Math.round(xs(n)) + .5;
       ctx.beginPath(); ctx.moveTo(x, yA0); ctx.lineTo(x, yA0+hA); ctx.stroke();
     }
@@ -331,15 +330,13 @@
     ctx.lineWidth = 1.6; ctx.setLineDash([6,5]); ctx.strokeStyle = cols.axis;
     scen.forEach(function(o){
       if (o.slope <= 0) return;
-      var ne = Math.min(X_MAX, P_MAX / o.slope);
-      ctx.beginPath(); ctx.moveTo(xs(0), yA(0)); ctx.lineTo(xs(ne), yA(o.slope * ne)); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(xs(nL), yA(o.slope * nL)); ctx.lineTo(xs(nR), yA(o.slope * nR)); ctx.stroke();
     });
     ctx.setLineDash([]);
     ctx.lineWidth = 3.4; ctx.strokeStyle = cols.accent;
-    var ec = cur.aop2 > 0 ? Math.min(X_MAX, P_MAX / cur.aop2) : X_MAX;
-    ctx.beginPath(); ctx.moveTo(xs(0), yA(0));
-    if (cur.aop2 >= 0) ctx.lineTo(xs(ec), yA(cur.aop2 * ec));
-    else ctx.lineTo(xs(X_MAX), yA(0)); // negative profit runs below the visible axis
+    ctx.beginPath();
+    if (cur.aop2 >= 0) { ctx.moveTo(xs(nL), yA(cur.aop2 * nL)); ctx.lineTo(xs(nR), yA(cur.aop2 * nR)); }
+    else { ctx.moveTo(xs(nL), yA(0)); ctx.lineTo(xs(nR), yA(0)); } // negative profit runs below the visible axis
     ctx.stroke();
     ctx.restore();
 
@@ -349,9 +346,11 @@
     var lastLx = -99, stack = 0;
     scen.slice().sort(function(a,b){ return b.slope - a.slope; }).forEach(function(o){
       if (o.slope <= 0) return;
-      var ne = Math.min(X_MAX, P_MAX / o.slope), pe = o.slope * ne;
+      var va = Math.max(nL, yMin / o.slope), vb = Math.min(nR, yMax / o.slope);
+      if (va > vb) return;
+      var ne = vb, pe = o.slope * ne;
       var lx = xs(ne), ly = yA(pe);
-      if (ne >= X_MAX - 0.5) { ctx.textAlign = 'left'; ctx.fillText(o.k + '%', Math.min(lx + 4, W - 30), ly); }
+      if (ne >= nR - 0.5) { ctx.textAlign = 'left'; ctx.fillText(o.k + '%', Math.min(lx + 4, W - 30), ly); }
       else {
         stack = (Math.abs(lx - lastLx) < 26) ? stack + 1 : 0;
         ctx.textAlign = 'center'; ctx.fillText(o.k + '%', lx - stack * 0, ly - 8 - stack * 12);
@@ -388,7 +387,7 @@
       ctx.beginPath(); ctx.moveTo(L, yy); ctx.lineTo(L+pw, yy); ctx.stroke();
       ctx.fillText(pct(r), L - 8, yy);
     });
-    for (var n2 = 0; n2 <= X_MAX; n2 += 250){
+    for (var n2 = Math.ceil(nL / 250) * 250; n2 <= nR + 1e-6; n2 += 250){
       var xx = Math.round(xs(n2)) + .5;
       ctx.beginPath(); ctx.moveTo(xx, yB0); ctx.lineTo(xx, yB0+hB); ctx.stroke();
       ctx.fillStyle = cols.muted; ctx.textAlign = 'center'; ctx.textBaseline = 'top';
@@ -406,12 +405,12 @@
     ctx.save();
     ctx.beginPath(); ctx.rect(L, yB0 - 2, pw + 40, hB + 4); ctx.clip();
     ctx.lineWidth = 1.6; ctx.setLineDash([6,5]); ctx.strokeStyle = cols.axis;
-    scen.forEach(function(o){ ctx.beginPath(); ctx.moveTo(xs(0), yB(o.roi)); ctx.lineTo(xs(X_MAX), yB(o.roi)); ctx.stroke(); });
+    scen.forEach(function(o){ ctx.beginPath(); ctx.moveTo(L, yB(o.roi)); ctx.lineTo(L + pw, yB(o.roi)); ctx.stroke(); });
     ctx.setLineDash([]); ctx.lineWidth = 3.4; ctx.strokeStyle = cols.accent;
-    ctx.beginPath(); ctx.moveTo(xs(0), yB(cur.roi)); ctx.lineTo(xs(X_MAX), yB(cur.roi)); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(L, yB(cur.roi)); ctx.lineTo(L + pw, yB(cur.roi)); ctx.stroke();
     ctx.restore();
     ctx.fillStyle = cols.muted; ctx.textAlign = 'left';
-    scen.forEach(function(o){ ctx.fillText(o.k + '%', xs(X_MAX) + 5, yB(o.roi)); });
+    scen.forEach(function(o){ ctx.fillText(o.k + '%', L + pw + 5, yB(o.roi)); });
 
     ctx.font = '600 13px -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif';
     ctx.fillStyle = cols.ink; ctx.textAlign = 'left';
@@ -430,20 +429,20 @@
 
     // hover
     if (hoverN != null){
-      var nn = Math.max(0, Math.min(X_MAX, Math.round(hoverN)));
+      var nn = nAct;
       var hx = xs(nn);
       ctx.strokeStyle = cols.ink; ctx.globalAlpha = .5; ctx.lineWidth = 1; ctx.setLineDash([3,3]);
       ctx.beginPath(); ctx.moveTo(hx, yA0); ctx.lineTo(hx, yB0 + hB); ctx.stroke();
       ctx.setLineDash([]); ctx.globalAlpha = 1;
       var prof = cur.aop2 * nn;
-      var py = yA(Math.max(0, Math.min(P_MAX, prof)));
+      var py = yA(Math.max(yMin, Math.min(yMax, prof)));
       ctx.fillStyle = cols.accent; ctx.strokeStyle = cols.card; ctx.lineWidth = isPinned ? 3 : 2;
       ctx.beginPath(); ctx.arc(hx, py, isPinned ? 7 : 5, 0, 7); ctx.fill(); ctx.stroke();
       // same dot on the ROI line
       ctx.beginPath(); ctx.arc(hx, Math.max(yB0, Math.min(yB0 + hB, yB(cur.roi))), isPinned ? 6 : 4, 0, 7); ctx.fill(); ctx.stroke();
     }
 
-    return {L:L, pw:pw};
+    return {L:L, pw:pw, R:R, yA0:yA0, hA:hA, yB0:yB0, hB:hB};
   }
 
   // ===== TEMPORARY: screen-recording button (1280x720, 30fps) =====
@@ -513,7 +512,7 @@
     c.strokeStyle = accent; c.lineWidth = 3; c.setLineDash([]); c.beginPath(); c.moveTo(lx, ly - 4); c.lineTo(lx + 22, ly - 4); c.stroke();
     c.fillText('Current SPCR', lx + 30, ly);
     lx += 150; c.strokeStyle = css('--axis'); c.lineWidth = 2; c.setLineDash([5,4]); c.beginPath(); c.moveTo(lx, ly - 4); c.lineTo(lx + 22, ly - 4); c.stroke(); c.setLineDash([]);
-    c.fillText('SPCR 1–6%', lx + 30, ly);
+    c.fillText('SPCR 1–5%', lx + 30, ly);
     lx += 140; c.fillStyle = css('--redfill'); c.fillRect(lx, ly - 13, 14, 14); c.strokeStyle = red; c.lineWidth = 1; c.strokeRect(lx + .5, ly - 12.5, 13, 13);
     c.fillStyle = muted; c.fillText('ROI below 100%', lx + 22, ly);
     lx += 150; c.fillStyle = css('--greenfill'); c.fillRect(lx, ly - 13, 14, 14); c.strokeStyle = green; c.strokeRect(lx + .5, ly - 12.5, 13, 13);
@@ -593,23 +592,50 @@
   });
   recBtn.addEventListener('click', function(){ recording ? stopRec() : startRec(); });
 
+  // pointer -> hovered N. Pushing the pointer against the left/right edge of the lower (ROI) chart scrolls both charts horizontally.
+  var lastPtr = null, panRaf = 0;
+  function applyPtr(step){
+    var g = cv._geom; if (!g || !lastPtr) { hoverN = null; return 0; }
+    var x = lastPtr.x, y = lastPtr.y, EZ = 44, vel = 0;
+    var inB = y >= g.yB0 - 6 && y <= g.yB0 + g.hB + 34;
+    if (inB){
+      var rEdge = g.L + g.pw;
+      if (x > rEdge - EZ && xOff < N_CAP - X_MAX) vel = Math.min(1.6, (x - (rEdge - EZ)) / EZ);
+      else if (x < g.L + EZ && xOff > 0) vel = -Math.min(1.6, (g.L + EZ - x) / EZ);
+    }
+    if (step && vel) xOff = Math.max(0, Math.min(N_CAP - X_MAX, xOff + vel * 14));
+    var nRaw = xOff + (x - g.L) / g.pw * X_MAX;
+    if (x >= g.L && x <= g.L + g.pw) hoverN = Math.min(N_CAP, nRaw);
+    else if (inB) hoverN = Math.max(xOff, Math.min(xOff + X_MAX, nRaw));
+    else hoverN = null;
+    return vel;
+  }
+  function panTick(){
+    panRaf = 0;
+    var v = applyPtr(true); draw();
+    if (v) panRaf = requestAnimationFrame(panTick);
+  }
   function onMove(e){
-    var g = cv._geom; if (!g) return;
-    var rect = cv.getBoundingClientRect();
-    var x = e.clientX - rect.left;
-    var n = (x - g.L) / g.pw * X_MAX;
-    hoverN = (n < 0 || n > X_MAX) ? null : n;
-    draw();
+    var r = cv.getBoundingClientRect();
+    lastPtr = {x: e.clientX - r.left, y: e.clientY - r.top};
+    var v = applyPtr(false); draw();
+    if (v && !panRaf) panRaf = requestAnimationFrame(panTick);
   }
   cv.addEventListener('pointermove', onMove);
   cv.addEventListener('pointerdown', onMove);
-  cv.addEventListener('pointerleave', function(){ hoverN = null; draw(); });
+  cv.addEventListener('pointerleave', function(){
+    lastPtr = null; hoverN = null;
+    if (panRaf) { cancelAnimationFrame(panRaf); panRaf = 0; }
+    if (pinnedN == null) xOff = 0;
+    draw();
+  });
   // click = pin the card at that point; click again = release
   cv.addEventListener('click', function(e){
-    var g = cv._geom; if (!g) return;
-    var n = (e.clientX - cv.getBoundingClientRect().left - g.L) / g.pw * X_MAX;
-    if (pinnedN != null) { pinnedN = null; hoverN = (n < 0 || n > X_MAX) ? null : n; }
-    else if (n >= 0 && n <= X_MAX) { pinnedN = n; }
+    var r = cv.getBoundingClientRect();
+    lastPtr = {x: e.clientX - r.left, y: e.clientY - r.top};
+    applyPtr(false);
+    if (pinnedN != null) pinnedN = null;
+    else if (hoverN != null) pinnedN = hoverN;
     draw();
   });
 
