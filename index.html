@@ -88,8 +88,8 @@
       </div>
       <div class="ctl">
         <div class="row"><label for="aov">AOV</label><span class="val" id="aovV"></span></div>
-        <input type="range" id="aov" min="35" max="250" step="1" value="97">
-        <div class="hint"><span>$35</span><span>$250</span></div>
+        <input type="range" id="aov" min="1" max="250" step="1" value="97">
+        <div class="hint"><span>$1</span><span>$250</span></div>
       </div>
 
       <div class="stats">
@@ -525,7 +525,7 @@
       ['Cost Per 1,000 Impressions (CPM)', '$' + s.cpm.toFixed(1), (s.cpm-10)/15, '$10', '$25'],
       ['CTR', (s.ctr*100).toFixed(1) + '%', (s.ctr*100-1)/3, '1%', '4%'],
       ['Sales Page Conversion Rate (SPCR)', (s.spcr*100).toFixed(1) + '%', (s.spcr*100-0.5)/5.5, '0.5%', '6%'],
-      ['AOV', '$' + s.aov, (s.aov-35)/215, '$35', '$250']
+      ['AOV', '$' + s.aov, (s.aov-1)/249, '$1', '$250']
     ];
     ctl.forEach(function(k, i){
       var y = py + 30 + i * 84, x0 = px + 16, x1 = px + pw - 16;
